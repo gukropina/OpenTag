@@ -1,8 +1,14 @@
 /*gukropina 
-April 26, 2014
+March 11, 2015
 Open Tag Developement
-//this comment is a test of github on mac
 
+Booyah
+
+Current work:
+1. Seeing if I can read from multiple receivers plugged into different pins
+//I need to change the stuff done after error = read_tag() into a function, and have read_tag()
+//all all its functions accept the ir_receiver_pin to look at as an input.
+2. Test the LED error codes by sending them to the tag unit
 
 This is the newest iteration of the open tag project using Lean startup
 principles. I will build small, testable pieces of code and do
@@ -66,9 +72,9 @@ Variables and Constants
 ******************/
 
 //******** Inputs and outpus (these could be bytes to save memory...)
-const int button_pin = 11;                 //button input is on pin 10. Active high.
-const int ir_LED_pin = 10;                  //IR LED is on pin 9
-const int ir_receiver_pin = 9;             //IR receiver is on pin 8. Active low.
+const int button_pin = 11;                 //button input is on pin 11. Active high.
+const int ir_LED_pin = 10;                  //IR LED is on pin 10
+const int ir_receiver_pin = 9;             //IR receiver is on pin 9. Active low.
 const int bits_sent = 12;                  //number of bits sent in a packet
 const int hit_LED_pin = 5;            //status LED pin, turn on when hit
 
@@ -110,6 +116,8 @@ int error;                                  //variable that lets me know if I've
 DEBUGGING
 *****************/
 const int serial_debug = 1;            //Make this 0 for no serial debugging information, 1 for serial debugging
+const int LED_debug = 1;               //Make this 0 if you want the indicator LED to act normally
+                                       //otherwise it will blink if the unit receives a bad code
 
 
 
@@ -139,6 +147,10 @@ void setup(){
  {
    //first thing I need to do is check to see if I'm getting tagged
    ir_receiver = digitalRead(ir_receiver_pin);   //read in the value of the IR receiver
+   
+   //I need to change the stuff done after error = read_tag() into a function, and have read_tag()
+   //all all its functions accept the ir_receiver_pin to look at as an input.
+   
    if (ir_receiver == 0){                        //my receiver is active low, so it's 0 if on
      error = read_tag();                         //read tag outputs an int that lets me know if I got a good tag
      
@@ -169,6 +181,38 @@ void setup(){
        delay(1000);
        digitalWrite(hit_LED_pin, LOW);
        }
+       
+     if(LED_debug){
+       //if I'm in this If, I want to know what error I got.
+       //So far, my errors are: (see tag function below)
+       /*
+        0: valid tag
+        5: Didn't receive a start bit first
+        6: received too many bits
+        7: didn't receive enough bits
+        8: timout"
+        */
+        switch (error){
+         case 0:
+           break;
+         case 5:
+           blink_LED(hit_LED_pin, 500, 2);
+           //this will blink the hit_LED_pin with a delay of 500 twice
+           break;
+         case 6:
+           blink_LED(hit_LED_pin, 500, 3);
+           break;
+         case 7:
+           blink_LED(hit_LED_pin, 500, 4);
+           break;
+         case 8:
+           blink_LED(hit_LED_pin, 500, 5);
+           break;
+         default:
+          break; 
+          
+        }
+     }
        //now I need to clear any data that I may have written into these arrays
        int i;
        for(i=0; i < tag_length; i++){
@@ -268,12 +312,15 @@ int read_tag(void){
   int debug_index = 0;                            //index to track of which protocol signal I'm on
   int ir_receiver_got = 0;                  //local variable to track of the last communication I got
   ir_receiver_got = read_protocol(debug_index);   //see what the IR sent
-  debug_index++;
+  debug_index++;                                 //the read_protocol function stores the time it
+                                                 //saw something in the debug aray at [debug_index]
+                                                 //I increment the index so I can store the next piece
   if(ir_receiver_got == 2) {
     //if I got the begin signal, then I can begin reading in data 
     //I will read data until I'm past my array, I get an end signal
-    int index = 0;           //keeps track of my idex in my tag ID array
+    int index = 0;                      //keeps track of my idex in my tag ID array
     unsigned long time = millis();      //to keep track of the time in milliseconds (millis() is 32 bit)
+                                        //this is used to see if I should time out
     while (true){
      //first, I need to get some digital input
      ir_receiver = digitalRead(ir_receiver_pin);
@@ -292,7 +339,7 @@ int read_tag(void){
         }
         else{
           //if index == tag_length, I'm passed my array. What's going on here. Abort!!!
-          return 6;           //alert the code! I've got an erro
+          return 6;           //alert the code! I've got an error
         }
        }
        else if (ir_receiver_got == 3){ 
@@ -314,13 +361,13 @@ int read_tag(void){
   }
   //So, if I get here, then I didn't get a 2, so I didn't see a valid tag.
   return 5;
-  
+  //Note: If I get a 4, the my_map function failed. See below.
 }
 
 /***************
 read_protocol
 This function is called to determine what was sent, either a 0, 1, start or end signal over IR.
-Inputs: nothing. It is called when the IR receiver goes low (active low)
+Inputs: the index for the debug array that I write to
 Outputs: 0,1,2,3 for a 0, 1, start or end signal
 If I wait for longer than an end signal, I will return an end signal
 ****************/
@@ -396,6 +443,24 @@ int my_map( int time_in ){
        }
   }
   return 4;
+}
+
+/********
+blink_LED
+This allows me to more easily write code to blink an LED a certain number of times.
+input: Pin LED is on (int),
+       delay time (int),
+       number of blinks (int),
+outputs: Will blink the LED using standard delays. Void output to program
+*******/
+void blink_LED(int blink_LED_pin, int delay_time, int num_blinks){
+  int i;
+  for(i = 0; i < num_blinks; i++){
+    digitalWrite(blink_LED_pin, HIGH);
+    delay(delay_time);
+    digitalWrite(blink_LED_pin, LOW);
+    delay(delay_time);
+  }
 }
 
 //insert coded stuff here, you know :)
