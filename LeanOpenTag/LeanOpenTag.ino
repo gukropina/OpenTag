@@ -1,6 +1,7 @@
 /*gukropina 
 April 26, 2014
 Open Tag Developement
+//this comment is a test of github on mac
 
 
 This is the newest iteration of the open tag project using Lean startup
