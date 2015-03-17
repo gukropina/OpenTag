@@ -6,8 +6,7 @@ Booyah
 
 Current work:
 1. Seeing if I can read from multiple receivers plugged into different pins
-//I need to change the stuff done after error = read_tag() into a function, and have read_tag()
-//all all its functions accept the ir_receiver_pin to look at as an input.
+//I changed the tag reading function to take in the pin to look at
 2. Test the LED error codes by sending them to the tag unit
 
 This is the newest iteration of the open tag project using Lean startup
@@ -152,7 +151,7 @@ void setup(){
    //all all its functions accept the ir_receiver_pin to look at as an input.
    
    if (ir_receiver == 0){                        //my receiver is active low, so it's 0 if on
-     error = read_tag();                         //read tag outputs an int that lets me know if I got a good tag
+     error = read_tag(ir_receiver_pin);          //read tag outputs an int that lets me know if I got a good tag
      
      if (serial_debug){
          Serial.println(" ");
@@ -299,7 +298,8 @@ void send_pulse(long pulse_duration){
 read_tag()
 uses the protocol for messages to decode the tagger's ID number
 This function is called when I start receiving a tag
-It outputs an integer, which is one of the following:
+inputs: pin to read (integer)
+outputs: an integer, which is one of the following:
   0: valid tag
   5: Didn't receive a start bit first
   6: received too many bits
@@ -308,10 +308,10 @@ It outputs an integer, which is one of the following:
 It also changes the tag_received_array with the tag i've got
 This function uses the read_protocol helper function to read what was sent
 ********************/
-int read_tag(void){
+int read_tag(int IR_Pin){
   int debug_index = 0;                            //index to track of which protocol signal I'm on
   int ir_receiver_got = 0;                  //local variable to track of the last communication I got
-  ir_receiver_got = read_protocol(debug_index);   //see what the IR sent
+  ir_receiver_got = read_protocol(IR_Pin, debug_index);   //see what the IR sent
   debug_index++;                                 //the read_protocol function stores the time it
                                                  //saw something in the debug aray at [debug_index]
                                                  //I increment the index so I can store the next piece
@@ -323,11 +323,11 @@ int read_tag(void){
                                         //this is used to see if I should time out
     while (true){
      //first, I need to get some digital input
-     ir_receiver = digitalRead(ir_receiver_pin);
+     ir_receiver = digitalRead(IR_Pin);
      //next, see if it's 0 (active low)
      if(ir_receiver == 0){
        //if I'm starting to get a piece of information, get it
-       ir_receiver_got = read_protocol(debug_index);
+       ir_receiver_got = read_protocol(IR_Pin, debug_index);
        debug_index++;
        //now I got to see what I've got
        if(ir_receiver_got == 0 || ir_receiver_got == 1){
@@ -367,18 +367,18 @@ int read_tag(void){
 /***************
 read_protocol
 This function is called to determine what was sent, either a 0, 1, start or end signal over IR.
-Inputs: the index for the debug array that I write to
+Inputs: Pin to read, the index for the debug array that I write to
 Outputs: 0,1,2,3 for a 0, 1, start or end signal
 If I wait for longer than an end signal, I will return an end signal
 ****************/
-int read_protocol(int i) {
+int read_protocol(int Pin_Read, int i) {
  // I will use the global variable ir_receiver, which keeps track of the ir_receiver state
  int count = 0;                              //this counts how many times I will have my delay
  while (ir_receiver == 0){
    count++;
   //while the receiver is still receiving a signal 
    delayMicroseconds(receiving_delay);         //delay for a bit. you know. you can't check constantly
-   ir_receiver = digitalRead(ir_receiver_pin); //see if the IR receiver pin has changed
+   ir_receiver = digitalRead(Pin_Read); //see if the IR receiver pin has changed
    //digital read takes about 3 microseconds
  }
    //now that I have the time that I wated for, I need to return which protocol singal it was
