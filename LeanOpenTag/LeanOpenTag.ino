@@ -1,5 +1,5 @@
 /*gukropina 
-March 11, 2015
+March 16, 2015
 Open Tag Developement
 
 Booyah
@@ -7,6 +7,9 @@ Booyah
 Current work:
 1. Seeing if I can read from multiple receivers plugged into different pins
 //I changed the tag reading function to take in the pin to look at
+//Do Next: add another receiver and see if that one can see stuff
+//Note: signals bounce in a room a lot. plug the receiver into another pin
+//to test this.
 2. Test the LED error codes by sending them to the tag unit
 
 This is the newest iteration of the open tag project using Lean startup
@@ -41,7 +44,12 @@ signal and have about a maximum of 10% error in the timing that I receive.
 (aka, if I send a 600 microsec signal, I will see around a 540 microsec
 signal. This was derived empirically [via testing])
 
-
+Current Protocol (microseconds):
+0: 600
+1: 1200
+Start: 1800
+End: 2400
+Error: +/- 300
 
 
 There are Y bits sent, which corresponds to Z number of possible players
@@ -78,7 +86,7 @@ const int bits_sent = 12;                  //number of bits sent in a packet
 const int hit_LED_pin = 5;            //status LED pin, turn on when hit
 
 //******** protocol definitions
-const long protocol_duration = 750;         //length of time a bit is send according to protocol in microseconds
+const long protocol_duration = 600;         //length of time a bit is send according to protocol in microseconds
 const int timeout = 30;                      //timeout in milliseconds. If i don't receive aything, I'm done
 const long samples_per_duration = 4;        //I will sample each duration 4 times
 const int tag_length = 2;                    //number of bits in the tag
@@ -114,7 +122,7 @@ int error;                                  //variable that lets me know if I've
 /****************
 DEBUGGING
 *****************/
-const int serial_debug = 1;            //Make this 0 for no serial debugging information, 1 for serial debugging
+const int serial_debug = 0;            //Make this 0 for no serial debugging information, 1 for serial debugging
 const int LED_debug = 1;               //Make this 0 if you want the indicator LED to act normally
                                        //otherwise it will blink if the unit receives a bad code
 
@@ -134,6 +142,9 @@ void setup(){
    Serial.print(tag_ID_array[i]);
    Serial.print(", "); 
   }
+   Serial.println("");
+   Serial.print("Protocol duration: ");
+   Serial.println(protocol_duration);
   delay(500);
   } 
  }
