@@ -52,20 +52,50 @@ I know that the arduino truncates, since when I input 2162, my output should be 
 
 \b0 Success. I can now pass a pin into my function (I think). I now have to actually hook up a new receiver and see if I get something different.\
 I sent a tag to my receiver using V1 of my tag unit (3.5\'94 lens, 1A current, 600 micro sec protocol). I got the following from the serial monitor:\
-tag to send is: 0, 1,  \
-tag received\
-Error: 8\
-Microseconds of pulse: 1955\
-Maps to: 2\
-Microseconds of pulse: 667\
-Maps to: 0\
-Microseconds of pulse: 1288\
-Maps to: 1\
-Microseconds of pulse: 2576\
-Maps to: 2\
-Tag received: 0, 1,  \
+tag to send is: 0, 1,  \
+tag received\
+Error: 8\
+Microseconds of pulse: 1955\
+Maps to: 2\
+Microseconds of pulse: 667\
+Maps to: 0\
+Microseconds of pulse: 1288\
+Maps to: 1\
+Microseconds of pulse: 2576\
+Maps to: 2\
+Tag received: 0, 1,  \
 Basically, I think I\'92m timing out too quickly, since I\'92m getting a timeout error. I may have to change my timeout code. Also, the last pulse is not mapping correctly. My protocol is based off of 600 microsec pulses, so an end code is 2400 micro sec +/- 300. 2576 is within this range, so it should be mapped to 3, which it isn\'92t. So 2 problems to solve.\
 Nope. The problem was that my receiver was using a 750 ms protocol, and I think my tag unit is still based off of 600 ms. \
 Although, this does raise the issue that my timeout is based on 30 ms, and my tags are actually being sent in micro seconds, not milliseconds. \
-\
-}
+
+\b Update 3/17/15\
+
+\b0 I updated my code so that it can read a tag coming in on multiple pins. However, occasionally I\'92m seeing a timeout error with my end code (timeout error is error 8):\
+tag received on pin 8\
+Error: 8\
+Microseconds of pulse: 2047\
+Maps to: 2\
+Microseconds of pulse: 736\
+Maps to: 0\
+Microseconds of pulse: 1403\
+Maps to: 1\
+Microseconds of pulse: 2714\
+Maps to: 4\
+Tag received: 0, 1,  \
+I\'92m using a 600 micro sec pulse time, so my end signal can be anywhere between 2100-2700 microseconds long. I\'92m 14 microseconds too long. \
+You know, this output looks a lot more like I\'92m using a 750 micro sec protocol duration.\
+But when I try a 750 microsecond duration, I get the opposite problem with my last signal, I map it to a 2 instead of a 3:\
+tag received on pin 9\
+Error: 8\
+Microseconds of pulse: 1955\
+Maps to: 2\
+Microseconds of pulse: 667\
+Maps to: 0\
+Microseconds of pulse: 1311\
+Maps to: 1\
+Microseconds of pulse: 2576\
+Maps to: 2\
+Tag received: 0, 1, \
+So, I think that I have an adequate system for timing, but I should make it more robust. It\'92d be nice if I configured a hardware timer to do the heavy lifting for me. It could start timing in microseconds, and stop when I don\'92t see anything anymore.\
+Possibilities: Use the micros() function. It has a resolution of 4 microseconds\
+use a crystal oscillator instead of a resonator. That will give me more precise timing.}

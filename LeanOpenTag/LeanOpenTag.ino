@@ -87,7 +87,7 @@ const int bits_sent = 12;                  //number of bits sent in a packet
 const int hit_LED_pin = 5;            //status LED pin, turn on when hit
 
 //******** protocol definitions
-const long protocol_duration = 600;         //length of time a bit is send according to protocol in microseconds
+const long protocol_duration = 750;         //length of time a bit is send according to protocol in microseconds
 const int timeout = 30;                      //timeout in milliseconds. If i don't receive aything, I'm done
 const long samples_per_duration = 4;        //I will sample each duration 4 times
 const int tag_length = 2;                    //number of bits in the tag
@@ -112,7 +112,8 @@ const int receiving_error = 0;
 //I got about a 10% error in the amount of time that it took to go through my code, so I'm adding that back in
 //this is empirically derived from having my receiver send a signal, then see how long i timed for.
 
-
+//these are global and should be in all caps.
+//shame on you for not following good coding practices and confusing yourself
 int button_state;                           //variable to keep track of button state
 int change_state;                           //variable to keep track of a change in the button state
 int ir_receiver;                           //variable to keep track of ir receiver input
@@ -123,7 +124,7 @@ int error;                                  //variable that lets me know if I've
 /****************
 DEBUGGING
 *****************/
-const int serial_debug = 0;            //Make this 0 for no serial debugging information, 1 for serial debugging
+const int serial_debug = 1;            //Make this 0 for no serial debugging information, 1 for serial debugging
 const int LED_debug = 1;               //Make this 0 if you want the indicator LED to act normally
                                        //otherwise it will blink if the unit receives a bad code
 
@@ -266,8 +267,32 @@ outputs: error code,
          any LED debugging information
 ********/
 int tag_function(int IR_Pin){
-  int error = read_tag(IR_Pin);            //read tag outputs an int that lets me know if I got a good tag
-  if (serial_debug)serial_tag_debug_fn(IR_Pin);  //if I'm doing a serial debug, send info out
+  //I got some weird outputs, so I'm using an internal error code instead
+  //of using the same name as global error. I'm not sure I should use this
+  //global variable thing.
+  int error_int = read_tag(IR_Pin);            //read tag outputs an int that lets me know if I got a good tag
+  if (serial_debug){                      //if I'm doing a serial debug, send info out
+         Serial.println(" ");
+         Serial.print("tag received on pin ");
+         Serial.println(IR_Pin);
+         Serial.print("Error: ");
+         Serial.println(error_int);
+         int i;
+         for(i=0; i < tag_length + 2; i++){
+           Serial.print("Microseconds of pulse: ");
+           Serial.println(debug_array[i]);
+           Serial.print("Maps to: ");
+           Serial.println(my_map(debug_array[i]));
+           delay(50);
+         }
+         Serial.print("Tag received: ");
+         for(i=0; i < tag_length; i++){
+          Serial.print( tag_received_array[i] );
+          Serial.print(", ");
+         }
+         Serial.println(" ");
+     
+  }
   if(LED_debug){
        //if I'm in this If, I want to know what error I got.
        //So far, my errors are: (see tag function below)
@@ -278,7 +303,7 @@ int tag_function(int IR_Pin){
         7: didn't receive enough bits
         8: timout"
         */
-        switch (error){
+        switch (error_int){
          case 0:
            break;
          case 5:
@@ -310,7 +335,7 @@ int tag_function(int IR_Pin){
         debug_array[i] = 0; 
        }
   
-  return error;     
+  return error_int;     
 }
 
 /********************
@@ -482,31 +507,5 @@ void blink_LED(int blink_LED_pin, int delay_time, int num_blinks){
   }
 }
 
-/*****
-serial_tag_debug_fn
-input: the pin you are reading off of
-output: serial output to terminal about the tag you just saw
-*****/
-void serial_tag_debug_fn(int IR_Pin){
-         Serial.println(" ");
-         Serial.print("tag received on pin ");
-         Serial.println(IR_Pin);
-         Serial.print("Error: ");
-         Serial.println(error);
-         int i;
-         for(i=0; i < tag_length + 2; i++){
-           Serial.print("Microseconds of pulse: ");
-           Serial.println(debug_array[i]);
-           Serial.print("Maps to: ");
-           Serial.println(my_map(debug_array[i]));
-           delay(50);
-         }
-         Serial.print("Tag received: ");
-         for(i=0; i < tag_length; i++){
-          Serial.print( tag_received_array[i] );
-          Serial.print(", ");
-         }
-         Serial.println(" ");
-}
 
 //insert coded stuff here, you know :)
