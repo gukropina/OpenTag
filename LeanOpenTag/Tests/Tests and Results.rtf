@@ -98,4 +98,11 @@ Maps to: 2\
 Tag received: 0, 1, \
 So, I think that I have an adequate system for timing, but I should make it more robust. It\'92d be nice if I configured a hardware timer to do the heavy lifting for me. It could start timing in microseconds, and stop when I don\'92t see anything anymore.\
 Possibilities: Use the micros() function. It has a resolution of 4 microseconds\
-use a crystal oscillator instead of a resonator. That will give me more precise timing.}
+use a crystal oscillator instead of a resonator. That will give me more precise timing.\
+\ul Result\ulnone : I changed my code to read in information using the micros() function. It seems to be more reliable. However, I can\'92t use the same function to time how long I\'92m sending pulses. micros() uses interrupts to count, and my send_pulse() function turns off interrupts so that it has precise timing. If I change send_pulse() to use a hardware timer, then I can enable interrupts and time how long I\'92m sending pulses for. That should give me more precise times when sending and receiving tags. I\'92m not sure this is necessary, but I could do it for future work.\
+
+\b Do Later in the Future Work (all of these can be done after tag unit is built and functioning):\
+
+\b0 1. Use hardware timer for send_pulse() function. This will let you use the micros() function (which needs interrupts) to time how long you send pulses and (should) give you more accurate info on the timing of pulses you send.\
+2. Try using a crystal oscillator for timing if you want to compare the accuracies.\
+3. Take out your version of timing and keep the micros() one. (or don\'92t compute it. You can do what you want)}
