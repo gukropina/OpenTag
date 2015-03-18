@@ -1,5 +1,5 @@
 /*gukropina 
-March 16, 2015
+March 18, 2015
 Open Tag Developement
 
 Booyah
@@ -81,7 +81,8 @@ Variables and Constants
 //******** Inputs and outpus (these could be bytes to save memory...)
 const int button_pin = 11;                 //button input is on pin 11. Active high.
 const int ir_LED_pin = 10;                  //IR LED is on pin 10
-const int ir_receiver_pin = 9;             //IR receiver is on pin 9. Active low.
+const int ir_receiver_pin_1 = 9;             //IR receiver 1 on pin 9. Active low.
+const int ir_receiver_pin_2 = 8;             //IR receiver 2 on pin 8. Active low.
 const int bits_sent = 12;                  //number of bits sent in a packet
 const int hit_LED_pin = 5;            //status LED pin, turn on when hit
 
@@ -131,7 +132,8 @@ const int LED_debug = 1;               //Make this 0 if you want the indicator L
 void setup(){
  pinMode(button_pin, INPUT); 
  pinMode(ir_LED_pin, OUTPUT);
- pinMode(ir_receiver_pin, INPUT);
+ pinMode(ir_receiver_pin_1, INPUT);
+ pinMode(ir_receiver_pin_2, INPUT);
  pinMode(hit_LED_pin,OUTPUT);
  if (serial_debug) Serial.begin(9600);   
  if (serial_debug){
@@ -156,82 +158,30 @@ void setup(){
  void loop()
  {
    //first thing I need to do is check to see if I'm getting tagged
-   ir_receiver = digitalRead(ir_receiver_pin);   //read in the value of the IR receiver
-   
-   //I need to change the stuff done after error = read_tag() into a function, and have read_tag()
-   //all all its functions accept the ir_receiver_pin to look at as an input.
-   
+   ir_receiver = digitalRead(ir_receiver_pin_1);   //read in the value of the IR receiver
    if (ir_receiver == 0){                        //my receiver is active low, so it's 0 if on
-     error = read_tag(ir_receiver_pin);          //read tag outputs an int that lets me know if I got a good tag
-     
-     if (serial_debug){
-         Serial.println(" ");
-         Serial.println("tag received");
-         Serial.print("Error: ");
-         Serial.println(error);
-         int i;
-         for(i=0; i < tag_length + 2; i++){
-           Serial.print("Microseconds of pulse: ");
-           Serial.println(debug_array[i]);
-           Serial.print("Maps to: ");
-           Serial.println(my_map(debug_array[i]));
-           delay(50);
-         }
-         Serial.print("Tag received: ");
-         for(i=0; i < tag_length; i++){
-          Serial.print( tag_received_array[i] );
-          Serial.print(", ");
-         }
-         Serial.println(" ");
-       }
+     error = tag_function(ir_receiver_pin_1);      //read tag, outputs the result, clears arrays and handles debug info.
+     //if I want to change my output to remember who tagged me, this is where I would do it. I would add a
+     //tagged_me output here from the tag function
      if(error == 0){                             //a 0 means I've been tagged                    
-       
        //do something now that you've been hit. Like deactivate and wait until you spawn at the base.
        digitalWrite(hit_LED_pin, HIGH);
        delay(1000);
        digitalWrite(hit_LED_pin, LOW);
        }
-       
-     if(LED_debug){
-       //if I'm in this If, I want to know what error I got.
-       //So far, my errors are: (see tag function below)
-       /*
-        0: valid tag
-        5: Didn't receive a start bit first
-        6: received too many bits
-        7: didn't receive enough bits
-        8: timout"
-        */
-        switch (error){
-         case 0:
-           break;
-         case 5:
-           blink_LED(hit_LED_pin, 500, 2);
-           //this will blink the hit_LED_pin with a delay of 500 twice
-           break;
-         case 6:
-           blink_LED(hit_LED_pin, 500, 3);
-           break;
-         case 7:
-           blink_LED(hit_LED_pin, 500, 4);
-           break;
-         case 8:
-           blink_LED(hit_LED_pin, 500, 5);
-           break;
-         default:
-          break; 
-          
-        }
-     }
-       //now I need to clear any data that I may have written into these arrays
-       int i;
-       for(i=0; i < tag_length; i++){
-        tag_received_array[i] = 0; 
-       }
-       for(i=0; i < tag_length + 2; i++){
-        debug_array[i] = 0; 
-       }
     }
+    
+    //now I need to check any other receivers I have
+    
+  ir_receiver = digitalRead(ir_receiver_pin_2);
+  if(ir_receiver == 0){
+    error = tag_function(ir_receiver_pin_2);
+    if(error == 0){
+      digitalWrite(hit_LED_pin, HIGH);
+      delay(2000);
+      digitalWrite(hit_LED_pin, LOW);
+    }
+  }
    
    //now that I've checked to see if I'm being tagged, I need to check to see
    //if I'm trying to tag someone else
@@ -303,6 +253,64 @@ void send_pulse(long pulse_duration){
   }
   
   sei();     //enable interrupts after while loop is done
+}
+
+/*******
+tag_function()
+This function is called when I think I'm getting tagged.
+It goes through all serial debugging, outputs, etc. for checking and reacting
+to being tagged.
+inputs: IR_pin receiving tag (int)
+outputs: error code,
+         any serial debugging information
+         any LED debugging information
+********/
+int tag_function(int IR_Pin){
+  int error = read_tag(IR_Pin);            //read tag outputs an int that lets me know if I got a good tag
+  if (serial_debug)serial_tag_debug_fn(IR_Pin);  //if I'm doing a serial debug, send info out
+  if(LED_debug){
+       //if I'm in this If, I want to know what error I got.
+       //So far, my errors are: (see tag function below)
+       /*
+        0: valid tag
+        5: Didn't receive a start bit first
+        6: received too many bits
+        7: didn't receive enough bits
+        8: timout"
+        */
+        switch (error){
+         case 0:
+           break;
+         case 5:
+           blink_LED(hit_LED_pin, 500, 2);
+           //this will blink the hit_LED_pin with a delay of 500 twice
+           break;
+         case 6:
+           blink_LED(hit_LED_pin, 500, 3);
+           break;
+         case 7:
+           blink_LED(hit_LED_pin, 500, 4);
+           break;
+         case 8:
+           blink_LED(hit_LED_pin, 500, 5);
+           break;
+         default:
+          break; 
+          
+        }
+     }
+  
+       //now I need to clear any data that I may have written into my global arrays
+       //since I am done using them, and want to be ready for the next tag
+       int i;
+       for(i=0; i < tag_length; i++){
+        tag_received_array[i] = 0; 
+       }
+       for(i=0; i < tag_length + 2; i++){
+        debug_array[i] = 0; 
+       }
+  
+  return error;     
 }
 
 /********************
@@ -472,6 +480,33 @@ void blink_LED(int blink_LED_pin, int delay_time, int num_blinks){
     digitalWrite(blink_LED_pin, LOW);
     delay(delay_time);
   }
+}
+
+/*****
+serial_tag_debug_fn
+input: the pin you are reading off of
+output: serial output to terminal about the tag you just saw
+*****/
+void serial_tag_debug_fn(int IR_Pin){
+         Serial.println(" ");
+         Serial.print("tag received on pin ");
+         Serial.println(IR_Pin);
+         Serial.print("Error: ");
+         Serial.println(error);
+         int i;
+         for(i=0; i < tag_length + 2; i++){
+           Serial.print("Microseconds of pulse: ");
+           Serial.println(debug_array[i]);
+           Serial.print("Maps to: ");
+           Serial.println(my_map(debug_array[i]));
+           delay(50);
+         }
+         Serial.print("Tag received: ");
+         for(i=0; i < tag_length; i++){
+          Serial.print( tag_received_array[i] );
+          Serial.print(", ");
+         }
+         Serial.println(" ");
 }
 
 //insert coded stuff here, you know :)
