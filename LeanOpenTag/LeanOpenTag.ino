@@ -100,7 +100,8 @@ const long protocol_wait = protocol_duration/samples_per_duration;//1/4 the prot
 int tag_ID_array[tag_length] ={0, 1};                  // this will give me tag_length bits
   //this will only index to tag_length - 1 (because I index starting at 0)
 int tag_received_array[tag_length];                    // array for tags I receive
-int debug_array[tag_length + 2];                       //for debugging how long of a signal i got
+int debug_array[2][tag_length + 2];                       //for debugging how long of a signal i got
+                                                      //I have two sources of time to track at the moment
 
 
 //************ receiving definitions
@@ -211,9 +212,10 @@ This outputs the correct sequence of pulses to the pin that has the IR LED
 *****************/
 void send_tag(void){
   
+  unsigned long microsec_debug = micros();  //save current microseconds time
   //I'm changing this to send bits out of an array
-  
   send_pulse(protocol_start);                   //send a low signal (delay in microseconds)
+  microsec_debug = micros() - microsec_debug;    //save difference in microseconds
   delayMicroseconds(protocol_duration);         //protocol delay, like the protocol dictates
   for (int i=0; i < tag_length; i++){           //for each bit in the tag_ID_Array
     if (tag_ID_array[i] == 0){                  // if the bit is a 0, send a 0
@@ -231,7 +233,11 @@ void send_tag(void){
    delayMicroseconds(protocol_duration);
    //I was seeing an echo, I saw my own tag that I sent out. I'm adding a delay at the end
    //so that I won't see my own tag reflecting off of stuff and coming back to me.
-   if (serial_debug) Serial.println("Tag sent");
+   if (serial_debug){
+    Serial.println("Tag sent");
+    Serial.print("Protocol microseconds: ");
+    Serial.println(microsec_debug);
+    }
  }
  
  /**********
@@ -280,9 +286,13 @@ int tag_function(int IR_Pin){
          int i;
          for(i=0; i < tag_length + 2; i++){
            Serial.print("Microseconds of pulse: ");
-           Serial.println(debug_array[i]);
+           Serial.print(debug_array[0][i]);
+           Serial.print("with micros() ");
+           Serial.println(debug_array[1][i]);
            Serial.print("Maps to: ");
-           Serial.println(my_map(debug_array[i]));
+           Serial.print(my_map(debug_array[0][i]));
+           Serial.print(", ");
+           Serial.println(my_map(debug_array[1][i]));
            delay(50);
          }
          Serial.print("Tag received: ");
@@ -332,7 +342,8 @@ int tag_function(int IR_Pin){
         tag_received_array[i] = 0; 
        }
        for(i=0; i < tag_length + 2; i++){
-        debug_array[i] = 0; 
+        debug_array[0][i] = 0;
+        debug_array[1][i] = 0; 
        }
   
   return error_int;     
@@ -418,6 +429,7 @@ If I wait for longer than an end signal, I will return an end signal
 int read_protocol(int Pin_Read, int i) {
  // I will use the global variable ir_receiver, which keeps track of the ir_receiver state
  int count = 0;                              //this counts how many times I will have my delay
+ int unsigned long microsec_debug = micros();  //this counts microseconds using a timer
  while (ir_receiver == 0){
    count++;
   //while the receiver is still receiving a signal 
@@ -429,7 +441,8 @@ int read_protocol(int Pin_Read, int i) {
    //I use my_map function for that
    
    //I also need some debugging here to see what's going on
-   debug_array[i] = count*(receiving_delay + 3 + receiving_error);
+   debug_array[0][i] = count*(receiving_delay + 3 + receiving_error);
+   debug_array[1][i] = micros() - microsec_debug;
    return my_map( count*(receiving_delay + 3 + receiving_error) );
  //this uses my map function which allows a signal to be half a protocol duration in length away from what it is
  //supposed to be and still calls it that value.  
