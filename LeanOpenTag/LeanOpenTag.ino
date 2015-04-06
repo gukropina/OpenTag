@@ -87,6 +87,9 @@ const int button_pin = 11;                 //button input is on pin 11. Active h
 const int ir_LED_pin = 10;                  //IR LED is on pin 10
 const int ir_receiver_pin_1 = 9;             //IR receiver 1 on pin 9. Active low.
 const int ir_receiver_pin_2 = 8;             //IR receiver 2 on pin 8. Active low.
+const int ir_receiver_pin_3 = 7;             //IR receiver 3 on pin 7. Active low.
+const int ir_receiver_pin_4 = 6;             //IR receiver 4 on pin 6. Active low.
+const int ir_receiver_pin_5 = 4;             //IR receiver 5 on pin 4. Active low.
 const int bits_sent = 12;                  //number of bits sent in a packet
 const int hit_LED_pin = 5;            //status LED pin, turn on when hit
 
@@ -140,6 +143,9 @@ void setup(){
  pinMode(ir_LED_pin, OUTPUT);
  pinMode(ir_receiver_pin_1, INPUT);
  pinMode(ir_receiver_pin_2, INPUT);
+ pinMode(ir_receiver_pin_3, INPUT);
+ pinMode(ir_receiver_pin_4, INPUT);
+ pinMode(ir_receiver_pin_5, INPUT);
  pinMode(hit_LED_pin,OUTPUT);
  if (serial_debug) Serial.begin(9600);   
  if (serial_debug){
@@ -164,30 +170,13 @@ void setup(){
  void loop()
  {
    //first thing I need to do is check to see if I'm getting tagged
-   ir_receiver = digitalRead(ir_receiver_pin_1);   //read in the value of the IR receiver
-   if (ir_receiver == 0){                        //my receiver is active low, so it's 0 if on
-     error = tag_function(ir_receiver_pin_1);      //read tag, outputs the result, clears arrays and handles debug info.
-     //if I want to change my output to remember who tagged me, this is where I would do it. I would add a
-     //tagged_me output here from the tag function
-     if(error == 0){                             //a 0 means I've been tagged                    
-       //do something now that you've been hit. Like deactivate and wait until you spawn at the base.
-       digitalWrite(hit_LED_pin, HIGH);
-       delay(1000);
-       digitalWrite(hit_LED_pin, LOW);
-       }
-    }
-    
-    //now I need to check any other receivers I have
-    
-  ir_receiver = digitalRead(ir_receiver_pin_2);
-  if(ir_receiver == 0){
-    error = tag_function(ir_receiver_pin_2);
-    if(error == 0){
-      digitalWrite(hit_LED_pin, HIGH);
-      delay(2000);
-      digitalWrite(hit_LED_pin, LOW);
-    }
-  }
+   //I am going to call the function that checks everything for each pin I have a
+   //receiver attached to
+   check_if_tagged(ir_receiver_pin_1);
+   check_if_tagged(ir_receiver_pin_2);
+   check_if_tagged(ir_receiver_pin_3);
+   check_if_tagged(ir_receiver_pin_4);
+   check_if_tagged(ir_receiver_pin_5);
    
    //now that I've checked to see if I'm being tagged, I need to check to see
    //if I'm trying to tag someone else
@@ -207,6 +196,32 @@ void setup(){
     delay(500);
    }
    */
+ }
+ 
+ /******
+ check_if_tagged
+ checks to see if I am getting hit on a certain pin, calls the correct
+ functions if I am, and calls the functions to see what was received,
+ and what to do when I am hit.
+ inputs: pin to look at
+ outputs: void (it will use global arrays)
+ ********/
+ 
+ void check_if_tagged(int pin_to_check){
+   ir_receiver = digitalRead(pin_to_check);   //read in the value of the IR receiver
+   if (ir_receiver == 0){                        //my receiver is active low, so it's 0 if on
+     error = tag_function(pin_to_check);      //read tag, outputs the result, clears arrays and handles debug info.
+     //if I want to change my output to remember who tagged me, this is where I would do it. I would add a
+     //tagged_me output here from the tag function
+     if(error == 0){                             //a 0 means I've been tagged                    
+       //do something now that you've been hit. Like deactivate and wait until you spawn at the base.
+       digitalWrite(hit_LED_pin, HIGH);
+       delay(1000);
+       digitalWrite(hit_LED_pin, LOW);
+       }
+    }
+    //return nothing. Not sure I need to do this, but hey, my function is over
+   return;
  }
 
 /**************
