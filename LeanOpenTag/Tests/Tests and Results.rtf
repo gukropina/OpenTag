@@ -105,4 +105,50 @@ use a crystal oscillator instead of a resonator. That will give me more precise 
 
 \b0 1. Use hardware timer for send_pulse() function. This will let you use the micros() function (which needs interrupts) to time how long you send pulses and (should) give you more accurate info on the timing of pulses you send.\
 2. Try using a crystal oscillator for timing if you want to compare the accuracies.\
-3. Take out your version of timing and keep the micros() one. (or don\'92t compute it. You can do what you want)}
+3. Take out your version of timing and keep the micros() one. (or don\'92t compute it. You can do what you want)\
+4/15/15\
+
+\b Arduino Uno Troubles
+\b0 \
+So, I built a new tag unit using and arduino uno. and I send a tag. This is what I receive:\
+tag received on pin 7\
+Error: 5\
+Microseconds of pulse (my timing): 2507 with micros() 2648\
+Maps to: 2, 3\
+Microseconds of pulse (my timing): 0 with micros() 0\
+Maps to: 4, 4\
+Microseconds of pulse (my timing): 0 with micros() 0\
+Maps to: 4, 4\
+Microseconds of pulse (my timing): 0 with micros() 0\
+Maps to: 4, 4\
+Tag received: 0, 0,  \
+I\'94m sending the start bit for too long with the Uno. Why? When I use my old unit (using Decemuilevonao\'85.something), I receive (on the Uno):\
+tag to send is: 0, 1, \
+Protocol duration: 750\
+ \
+tag received on pin 9\
+Error: 0\
+Microseconds of pulse (my timing): 1932 with micros() 2100\
+Maps to: 2, 2\
+Microseconds of pulse (my timing): 667 with micros() 732\
+Maps to: 0, 0\
+Microseconds of pulse (my timing): 1311 with micros() 1424\
+Maps to: 1, 1\
+Microseconds of pulse (my timing): 2599 with micros() 2816\
+Maps to: 2, 3\
+Tag received: 0, 1,  \
+So it looks like my receiving function is working fine on the Uno, but not the sending function. huh.\
+I changed the protocol duration on the uno to 600, and my Dec received the tag. Ok. So I am sending something, but the sending function is different in Uno versus Dec. Weird. \
+I switched my send_pulse function so that it used the TimerOne library (using a hardware timer for sending the pulses. This is what I received:\
+tag received on pin 7\
+Error: 0\
+Microseconds of pulse (my timing): 2185 with micros() 2304\
+Maps to: 2, 2\
+Microseconds of pulse (my timing): 759 with micros() 804\
+Maps to: 0, 0\
+Microseconds of pulse (my timing): 1472 with micros() 1556\
+Maps to: 1, 1\
+Microseconds of pulse (my timing): 2852 with micros() 3000\
+Maps to: 3, 3\
+Tag received: 0, 1,  \
+Fricken beauty. off by 50 microseconds. Why I didn\'92t use this to begin with, I don\'92t know. But hey, now I know. However, I still can\'92t get my first tag unit to light up. It may be running on a 600 protocol. I wouldn\'92t get a start code with a 750 protocol sending to a 600 protocol. Once I add more receivers to the first receiver I made, I should be able to test this theory. Until then, I don\'92t want to take it off, use new code (with 5 receivers, then go back). Not now. Maybe in a bit. When I have more time.}

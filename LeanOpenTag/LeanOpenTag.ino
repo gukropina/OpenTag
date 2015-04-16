@@ -6,7 +6,7 @@ Booyah
 
 Current work:
 
-2. Test the LED error codes by sending them to the tag unit (if time)
+1. Try using the TimerOne library to send my 38kHz wave.
 
 This is the newest iteration of the open tag project using Lean startup
 principles. I will build small, testable pieces of code and do
@@ -78,6 +78,12 @@ The send pulse function is working.
 The send_tag function checks for new button presses correctly
 */
 
+/*******
+Libraries
+*****/
+#include <TimerOne.h>
+//the Timer 1 library makes it easy to control hardware timer 1 on the arduino.
+
 /*****************
 Variables and Constants
 ******************/
@@ -85,6 +91,7 @@ Variables and Constants
 //******** Inputs and outpus (these could be bytes to save memory...)
 const int button_pin = 11;                 //button input is on pin 11. Active high.
 const int ir_LED_pin = 10;                  //IR LED is on pin 10
+//IR LED has to be on pin 10 or 9 for Timer1
 const int ir_receiver_pin_1 = 9;             //IR receiver 1 on pin 9. Active low.
 const int ir_receiver_pin_2 = 8;             //IR receiver 2 on pin 8. Active low.
 const int ir_receiver_pin_3 = 7;             //IR receiver 3 on pin 7. Active low.
@@ -132,13 +139,15 @@ int error;                                  //variable that lets me know if I've
 /****************
 DEBUGGING
 *****************/
-const int serial_debug = 0;            //Make this 0 for no serial debugging information, 1 for serial debugging
+const int serial_debug = 1;            //Make this 0 for no serial debugging information, 1 for serial debugging
 const int LED_debug = 1;               //Make this 0 if you want the indicator LED to act normally
                                        //otherwise it will blink if the unit receives a bad code
 
 
 
 void setup(){
+ Timer1.initialize(26);            //start a timer with a period of 26 microseconds, or about 38.5 kHz
+ //not sure if this is necessary, but hey, why not? 
  pinMode(button_pin, INPUT); 
  pinMode(ir_LED_pin, OUTPUT);
  pinMode(ir_receiver_pin_1, INPUT);
@@ -184,10 +193,10 @@ void setup(){
    button_state = digitalRead(button_pin);
    change_state = change_state_checker(button_state);  //see if button changed state
    if (change_state){
+    send_tag();                       //run tagging code
     digitalWrite(hit_LED_pin, HIGH);
     delay(1000);
     digitalWrite(hit_LED_pin, LOW);
-    send_tag();                       //run tagging code
    }
    
    /*
@@ -277,6 +286,11 @@ input is the amount of time to send the signal in microseconds
 The output is writing the IR_LED pin high and low for the pulse duration
 **********/
 void send_pulse(long pulse_duration){
+  Timer1.pwm(ir_LED_pin, 512);           //send pulse
+  delayMicroseconds(pulse_duration);     //delay for the time being
+  Timer1.disablePwm(ir_LED_pin);         //turn off PWM
+  /*
+  I am commenting this code and switching to timers
   //according to Ladyada's tutorial, I need a 38 kHz signal, which is 13 microseconds high and 13 microseconds low
   //digitalWrite takes about 3 microseconds
   cli();     //turns off interrupts. We can't have the program interrupt this part
@@ -290,6 +304,7 @@ void send_pulse(long pulse_duration){
   }
   
   sei();     //enable interrupts after while loop is done
+  */
 }
 
 /*******
