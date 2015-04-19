@@ -6,7 +6,12 @@ Booyah
 
 Current work:
 
-1. Try using the TimerOne library to send my 38kHz wave.
+1. I'm adding health. When health = 0, you can't tag.
+2. I also want to add code that changes how lights are tuned oon and 
+   off so that they do not make the player invulnerable
+3. Finally, I added code to read an integer from a specific position 
+   within my debug_array[1] (where I am storing
+4. Deleting global variables, making all others ALL CAPS
 
 This is the newest iteration of the open tag project using Lean startup
 principles. I will build small, testable pieces of code and do
@@ -103,38 +108,37 @@ const int hit_LED_pin = 5;            //status LED pin, turn on when hit
 //******** protocol definitions
 const long protocol_duration = 750;         //length of time a bit is send according to protocol in microseconds
 const int timeout = 30;                      //timeout in milliseconds. If i don't receive aything, I'm done
-const long samples_per_duration = 4;        //I will sample each duration 4 times
 const int tag_length = 2;                    //number of bits in the tag
 
 const long protocol_start = 3*protocol_duration;           //start signal
 const long protocol_one = 2*protocol_duration;             // 1
 const long protocol_zero = protocol_duration;              // 0
 const long protocol_end = 4*protocol_duration;             // end signal
-const long protocol_wait = protocol_duration/samples_per_duration;//1/4 the protocol duration, for receiving
+
+//when I make this game with bases, my ID can be given by the base
+//for now, I enter my ID in binary below
 int tag_ID_array[tag_length] ={0, 1};                  // this will give me tag_length bits
-  //this will only index to tag_length - 1 (because I index starting at 0)
 int tag_received_array[tag_length];                    // array for tags I receive
 int debug_array[2][tag_length + 2];                    //for debugging how long of a signal i got
-                                                       //I have two sources of time to track at the moment
+//I have two methods of calculating time hit at the moment. I'm using the better one and can delete the old one.
 
+//********** Other constants
+const unsigned long blink_time = 1000;                 //time for one blink of LED in ms
 
 //************ receiving definitions
-const int receiving_delay = 20;             //this is the delay in microseconds between reading the signal
+const int receiving_delay = 5;             //this is the delay in microseconds between reading the signal
+//not sure I need this delay, but I use it in my receiving a tag code
 
-const int receiving_error = 0;
+//const int receiving_error = 0;
 //using digital read, I don't need this.
 //when I used port manipulation instead of digital read,
 //I got about a 10% error in the amount of time that it took to go through my code, so I'm adding that back in
 //this is empirically derived from having my receiver send a signal, then see how long i timed for.
 
-//these are global and should be in all caps.
-//shame on you for not following good coding practices and confusing yourself
-int button_state;                           //variable to keep track of button state
-int change_state;                           //variable to keep track of a change in the button state
-int ir_receiver;                           //variable to keep track of ir receiver input
-int received_data;                          //variable to store tag data from the tagger
-int valid_data;                            //variable to check if tag is valid
-int error;                                  //variable that lets me know if I've got an error in my tag
+//******GLOBAL VARIABLES*****
+int HEALTH = 5;         //this is the number of times i can be hit before you can't tag
+//health is an int, so goes from 32,000 to -32,000. Hopefully i don't need to care about overflow...
+
 
 /****************
 DEBUGGING
@@ -190,14 +194,18 @@ void setup(){
    //now that I've checked to see if I'm being tagged, I need to check to see
    //if I'm trying to tag someone else
    
-   button_state = digitalRead(button_pin);
-   change_state = change_state_checker(button_state);  //see if button changed state
-   if (change_state){
-    send_tag();                       //run tagging code
-    digitalWrite(hit_LED_pin, HIGH);
-    delay(1000);
-    digitalWrite(hit_LED_pin, LOW);
+   if(HEALTH > 0){
+     if (change_state_checker( digitalRead(button_pin) )){          //see if button changed state
+     //if so, I am pushing the button for the first time, do something
+      send_tag();                       //run tagging code
+      //now I want to set my LED high, but not use a delay, so that I can have the code do other
+      //stuff
+      set_LED(hit_LED_pin, blink_time, 1);
+     }
    }
+   
+   //now I need to check to see if I need to turn off my LED
+   set_LED(hit_LED_pin, 0, 0);
    
    /*
    if (serial_debug){
@@ -217,21 +225,44 @@ void setup(){
  ********/
  
  void check_if_tagged(int pin_to_check){
-   ir_receiver = digitalRead(pin_to_check);   //read in the value of the IR receiver
+   int ir_receiver = digitalRead(pin_to_check);   //read in the value of the IR receiver
+   int error;                                     //the error value coming from reading a tag
    if (ir_receiver == 0){                        //my receiver is active low, so it's 0 if on
      error = tag_function(pin_to_check);      //read tag, outputs the result, clears arrays and handles debug info.
      //if I want to change my output to remember who tagged me, this is where I would do it. I would add a
      //tagged_me output here from the tag function
      if(error == 0){                             //a 0 means I've been tagged                    
        //do something now that you've been hit. Like deactivate and wait until you spawn at the base.
-       digitalWrite(hit_LED_pin, HIGH);
-       delay(1000);
-       digitalWrite(hit_LED_pin, LOW);
+       i_am_tagged();
        }
     }
     //return nothing. Not sure I need to do this, but hey, my function is over
    return;
  }
+
+/*******
+i_am_tagged()
+This function deals with getting tagged. It is called when you are tagged.
+It deals with global variables such as health. All global variables should be
+in all caps. I'll get to that sometime.
+inputs: void
+outputs: void
+********/
+void i_am_tagged(void){
+ //well, you got tagged. So what happens to you?
+ int tagged_me = get_tag_ID( 0, tag_length - 1);   // if I got a good tag, get an int of who tagged me?
+ HEALTH = HEALTH--;                       //programmer speak for health = health - 1;
+ set_LED(hit_LED_pin, blink_time, 1);     //blink LED 
+ 
+ //for now, I just want to print out who tagged me
+ if(serial_debug){
+   Serial.print("Who tagged me: ");
+   Serial.println(tagged_me);
+   Serial.print("Health: ");
+   Serial.println(HEALTH);
+   Serial.println(" ");
+ }
+}
 
 /**************
 send_tag
@@ -321,22 +352,27 @@ int tag_function(int IR_Pin){
   //I got some weird outputs, so I'm using an internal error code instead
   //of using the same name as global error. I'm not sure I should use this
   //global variable thing.
-  int error_int = read_tag(IR_Pin);            //read tag outputs an int that lets me know if I got a good tag
-  if (serial_debug){                      //if I'm doing a serial debug, send info out
+  
+  int error = read_tag(IR_Pin);               //read tag outputs an int that lets me know if I got a good tag
+  if (serial_debug){                          //if I'm doing a serial debug, send info out
          Serial.println(" ");
          Serial.print("tag received on pin ");
          Serial.println(IR_Pin);
          Serial.print("Error: ");
-         Serial.println(error_int);
+         Serial.println(error);
          int i;
          for(i=0; i < tag_length + 2; i++){
+           /*
            Serial.print("Microseconds of pulse (my timing): ");
            Serial.print(debug_array[0][i]);
+           */
            Serial.print(" with micros() ");
            Serial.println(debug_array[1][i]);
            Serial.print("Maps to: ");
+           /*
            Serial.print(my_map(debug_array[0][i]));
            Serial.print(", ");
+           */
            Serial.println(my_map(debug_array[1][i]));
            delay(50);
          }
@@ -358,7 +394,7 @@ int tag_function(int IR_Pin){
         7: didn't receive enough bits
         8: timout"
         */
-        switch (error_int){
+        switch (error){
          case 0:
            break;
          case 5:
@@ -391,7 +427,7 @@ int tag_function(int IR_Pin){
         debug_array[1][i] = 0; 
        }
   
-  return error_int;     
+  return error;     
 }
 
 /********************
@@ -409,7 +445,8 @@ It also changes the tag_received_array with the tag i've got
 This function uses the read_protocol helper function to read what was sent
 ********************/
 int read_tag(int IR_Pin){
-  int debug_index = 0;                            //index to track of which protocol signal I'm on
+  int ir_receiver;                          //this is used to keep track of what the IR receiver state is
+  int debug_index = 0;                      //index to track of which protocol signal I'm on
   int ir_receiver_got = 0;                  //local variable to track of the last communication I got
   ir_receiver_got = read_protocol(IR_Pin, debug_index);   //see what the IR sent
   debug_index++;                                 //the read_protocol function stores the time it
@@ -468,13 +505,14 @@ int read_tag(int IR_Pin){
 read_protocol
 This function is called to determine what was sent, either a 0, 1, start or end signal over IR.
 Inputs: Pin to read, the index for the debug array that I write to
-Outputs: 0,1,2,3 for a 0, 1, start or end signal
+Outputs: 0,1,2,3,4 for a 0, 1, start, end signal, or error.
 If I wait for longer than an end signal, I will return an end signal
 ****************/
 int read_protocol(int Pin_Read, int i) {
- // I will use the global variable ir_receiver, which keeps track of the ir_receiver state
- int count = 0;                              //this counts how many times I will have my delay
- int unsigned long microsec_debug = micros();  //this counts microseconds using a timer
+ int ir_receiver = 0;                          //keeps track of what state ir_receiver is (starts = 0 since
+                                               //I'm getting tagged when I call this function
+ int count = 0;                                //this counts how many times I will have my delay
+ int unsigned long microsec_start = micros();  //this counts microseconds using a timer
  while (ir_receiver == 0){
    count++;
   //while the receiver is still receiving a signal 
@@ -482,12 +520,12 @@ int read_protocol(int Pin_Read, int i) {
    ir_receiver = digitalRead(Pin_Read); //see if the IR receiver pin has changed
    //digital read takes about 3 microseconds
  }
-   //now that I have the time that I wated for, I need to return which protocol singal it was
+   //now that I have the time that I waited for, I need to return which protocol singal it was
    //I use my_map function for that
    
    //I also need some debugging here to see what's going on
-   debug_array[0][i] = count*(receiving_delay + 3 + receiving_error);
-   debug_array[1][i] = micros() - microsec_debug;
+   //debug_array[0][i] = count*(receiving_delay + 3 + receiving_error);
+   debug_array[1][i] = micros() - microsec_start;
    //using micros is more consistent than my timing function, so I will use
    //that instead.
    return my_map( debug_array[1][i] );
@@ -497,11 +535,23 @@ int read_protocol(int Pin_Read, int i) {
 
 
 /****************
-check_tag
-checks to see if the tag is valid. an invalid tag is an array of all 1's.
+get_tag_ID
+This is only called after I have received a tag and stored it into tag_received_array.
+tag_received_array is the ID of my tagger (no start or stop codes)
+This outputs an integer with the ID (or value) of a specific part of the tag
+It builds the integer from the back of the tag (starts with the 1's position)
+and moves towards the 2's, 4's, etc. position to build an integer.
+inputs: start and stop parts of debug_array to build an int from (int)
+output: integer build from the bits in debug array specified
 *****************/
-int check_tag(){
- 
+int get_tag_ID(int array_start, int array_stop){
+  int output = 0;
+  int i;
+  for (i = array_start; i <= array_stop; i++){
+    output = output << 1;                        //bitshift left to multiply by 2 and shift all bits
+    output = output + tag_received_array[i];     //add new bit
+  }
+ return output;
 }
 
 /**********
@@ -565,6 +615,33 @@ void blink_LED(int blink_LED_pin, int delay_time, int num_blinks){
     digitalWrite(blink_LED_pin, LOW);
     delay(delay_time);
   }
+}
+
+/*******
+set_LED
+This function will turn off an LED in a set period of time, using the millis()
+function. This will check to see whether or not I need to turn on/off an LED
+intput: set_LED_pin is the pin the LED is on (int)
+        time_set is the time to turn off LED from now in milliseconds (int)
+        start_time is whether or not to start timing from here or not (1 for starting, 0 for not)
+output: direct control of the LED pin
+*******/
+void set_LED( int set_LED_pin, unsigned long time_set, int start_time){
+ //so, I need an internal variable that keeps track of the current time
+ static unsigned long LED_off_time;
+ if (start_time){
+  LED_off_time = millis() + time_set;
+  digitalWrite(set_LED_pin, HIGH);
+ }
+ else{
+  if(millis() > LED_off_time){
+   digitalWrite(set_LED_pin, LOW); 
+  }
+ }
+ //when millis() overflows, this code will keep a light on until you reset it. but hey, 
+ //that'll happen almost never.
+ //unless you don't turn the unit off for over a month (50 days ish)
+ return;
 }
 
 
