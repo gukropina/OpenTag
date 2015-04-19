@@ -6,12 +6,15 @@ Booyah
 
 Current work:
 
-1. I'm adding health. When health = 0, you can't tag.
+1. I'm adding health. When health = 0, you can't tag. - VERIFIED
 2. I also want to add code that changes how lights are turned on and 
-   off so that they do not make the player invulnerable
+   off so that they do not make the player invulnerable - VERIFIED
 3. Finally, I added code to read an integer from a specific position 
-   within my debug_array[1] (where I am storing
-4. Deleted global variables, making all others ALL CAPS
+   within my debug_array[1] (where I am storing - VERIFIED
+4. Deleted global variables, making all others ALL CAPS - VERIFIED
+
+5. NEW ISSUE - I can tag my old unit with 600 ms protocol, but it sends a 750 ms
+I think that I need to upload new code to it.
 
 This is the newest iteration of the open tag project using Lean startup
 principles. I will build small, testable pieces of code and do
@@ -106,7 +109,7 @@ const int bits_sent = 12;                  //number of bits sent in a packet
 const int hit_LED_pin = 5;            //status LED pin, turn on when hit
 
 //******** protocol definitions
-const long protocol_duration = 750;         //length of time a bit is send according to protocol in microseconds
+const long protocol_duration = 600;         //length of time a bit is send according to protocol in microseconds
 const int timeout = 30;                      //timeout in milliseconds. If i don't receive aything, I'm done
 const int tag_length = 2;                    //number of bits in the tag
 
@@ -193,16 +196,7 @@ void setup(){
    
    //now that I've checked to see if I'm being tagged, I need to check to see
    //if I'm trying to tag someone else
-   
-   if(HEALTH > 0){
-     if (change_state_checker( digitalRead(button_pin) )){          //see if button changed state
-     //if so, I am pushing the button for the first time, do something
-      send_tag();                       //run tagging code
-      //now I want to set my LED high, but not use a delay, so that I can have the code do other
-      //stuff
-      set_LED(hit_LED_pin, blink_time, 1);
-     }
-   }
+   check_if_tagging();
    
    //now I need to check to see if I need to turn off my LED
    set_LED(hit_LED_pin, 0, 0);
@@ -262,6 +256,40 @@ void i_am_tagged(void){
    Serial.println(HEALTH);
    Serial.println(" ");
  }
+ 
+ //now I need to clear out who tagged me, since I'm done using it
+ int i;
+ for(i=0; i < tag_length; i++){
+  tag_received_array[i] = 0; 
+ }
+}
+
+/*************
+check_if_tagging()
+This function checks to see if I am trying to tag someone, then calls the appropriate functions
+inputs: none
+outputs: none
+***************/
+void check_if_tagging( void ){
+  int button_state= digitalRead(button_pin);                 //variable to keep track of button state
+  int button_changed = change_state_checker( button_state ); //variable to see if button was just pressed
+  //if I don't have health, then I really don't need to check anything
+  if(serial_debug){
+   if(button_changed){
+     Serial.println("Checking if I can tag");
+     delay(500);
+   }
+  } 
+    
+  if(HEALTH > 0){
+     if (button_changed){          //see if button changed state
+     //if so, I am pushing the button for the first time, do something
+      send_tag();                       //run tagging code
+      //now I want to set my LED high, but not use a delay, so that I can have the code do other
+      //stuff
+      set_LED(hit_LED_pin, blink_time, 1);
+     }
+   }
 }
 
 /**************
@@ -419,9 +447,6 @@ int tag_function(int IR_Pin){
        //now I need to clear any data that I may have written into my global arrays
        //since I am done using them, and want to be ready for the next tag
        int i;
-       for(i=0; i < tag_length; i++){
-        tag_received_array[i] = 0; 
-       }
        for(i=0; i < tag_length + 2; i++){
         debug_array[0][i] = 0;
         debug_array[1][i] = 0; 
@@ -550,6 +575,17 @@ int get_tag_ID(int array_start, int array_stop){
   for (i = array_start; i <= array_stop; i++){
     output = output << 1;                        //bitshift left to multiply by 2 and shift all bits
     output = output + tag_received_array[i];     //add new bit
+    /* don't need serial debug anymore
+    if(serial_debug){
+      Serial.print("i: ");
+      Serial.println(i);
+      Serial.print("tag received array: ");
+      Serial.println(tag_received_array[i]);
+      Serial.print("output: ");
+      Serial.println(output);
+      delay(500);
+    }
+    */
   }
  return output;
 }
@@ -562,16 +598,34 @@ outputs 0 otherwise
 ***********/
 int change_state_checker(int current_state){
   static int last_state;
+  
   if (current_state != last_state){     //if it has changed
      if (last_state == 0){
+       if (serial_debug){
+       Serial.println("button pressed");
+       delay(500);                          //I need to add a delay to let Serial keep up
+       }
+      last_state = current_state;          //save the change in the current state
       return 1;     //if it changed from 0 to 1, output 1
-      if (serial_debug) Serial.println("button pressed");
      }
+     
      if (last_state == 1){
        //if it changed from 1 to 0, output is already 0
-       if (serial_debug) Serial.println("button released");
+       if (serial_debug){
+        Serial.println("button released");
+        //delay(500);
+       }
      }
   }
+  /* I don't need the debugging below anymore
+  if(serial_debug){
+   Serial.print("last_state: ");
+   Serial.println(last_state);
+   Serial.print("current_state: ");
+   Serial.println(current_state); 
+   delay(2000);
+  }
+  */
   last_state = current_state;          //reset last_state to current_state
   return 0;                            //return 0 if I didn't get a change from 0 to 1
  }
