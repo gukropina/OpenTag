@@ -7,11 +7,11 @@ Booyah
 Current work:
 
 1. I'm adding health. When health = 0, you can't tag.
-2. I also want to add code that changes how lights are tuned oon and 
+2. I also want to add code that changes how lights are turned on and 
    off so that they do not make the player invulnerable
 3. Finally, I added code to read an integer from a specific position 
    within my debug_array[1] (where I am storing
-4. Deleting global variables, making all others ALL CAPS
+4. Deleted global variables, making all others ALL CAPS
 
 This is the newest iteration of the open tag project using Lean startup
 principles. I will build small, testable pieces of code and do
