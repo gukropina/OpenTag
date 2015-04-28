@@ -14,7 +14,8 @@ Current work:
 4. Deleted global variables, making all others ALL CAPS - VERIFIED
 
 5. NEW ISSUE - I can tag my old unit with 600 ms protocol, but it sends a 750 ms
-I think that I need to upload new code to it.
+I think that I need to upload new code to it. - VERIFIED
+All units are now on a 600 microsec protocol.
 
 This is the newest iteration of the open tag project using Lean startup
 principles. I will build small, testable pieces of code and do
