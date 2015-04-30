@@ -10,7 +10,7 @@ Current work:
 2. I also want to add code that changes how lights are turned on and 
    off so that they do not make the player invulnerable - VERIFIED
 3. Finally, I added code to read an integer from a specific position 
-   within my debug_array[1] (where I am storing - VERIFIED
+   within my tag_received_array (where I am storing who tagged me)- VERIFIED
 4. Deleted global variables, making all others ALL CAPS - VERIFIED
 
 5. NEW ISSUE - I can tag my old unit with 600 ms protocol, but it sends a 750 ms
@@ -105,7 +105,6 @@ const int ir_receiver_pin_2 = 8;             //IR receiver 2 on pin 8. Active lo
 const int ir_receiver_pin_3 = 7;             //IR receiver 3 on pin 7. Active low.
 const int ir_receiver_pin_4 = 6;             //IR receiver 4 on pin 6. Active low.
 const int ir_receiver_pin_5 = 4;             //IR receiver 5 on pin 4. Active low.
-const int bits_sent = 12;                  //number of bits sent in a packet
 const int hit_LED_pin = 5;            //status LED pin, turn on when hit
 
 //******** protocol definitions
@@ -120,9 +119,9 @@ const long protocol_end = 4*protocol_duration;             // end signal
 
 //when I make this game with bases, my ID can be given by the base
 //for now, I enter my ID in binary below
-int tag_ID_array[tag_length] ={0, 1};                  // this will give me tag_length bits
+int tag_ID_array[tag_length] = {0, 1};                  // this will give me tag_length bits
 int tag_received_array[tag_length];                    // array for tags I receive
-int debug_array[2][tag_length + 2];                    //for debugging how long of a signal i got
+int debug_array[2][tag_length + 2];                    //for debugging how long of a signal I got
 //I have two methods of calculating time hit at the moment. I'm using the better one and can delete the old one.
 
 //********** Other constants
