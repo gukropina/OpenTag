@@ -6,15 +6,9 @@ Booyah
 
 Current work:
 
-1. I'm adding health. When health = 0, you can't tag. - VERIFIED
-2. I also want to add code that changes how lights are turned on and 
-   off so that they do not make the player invulnerable - VERIFIED
-3. Finally, I added code to read an integer from a specific position 
-   within my tag_received_array (where I am storing who tagged me)- VERIFIED
-4. Deleted global variables, making all others ALL CAPS - VERIFIED
+1. Adding a hit LED and a status LED. I need to update the function that
+checks the LED's status and update the code that calls it.
 
-5. NEW ISSUE - I can tag my old unit with 600 ms protocol, but it sends a 750 ms
-I think that I need to upload new code to it. - VERIFIED
 All units are now on a 600 microsec protocol.
 
 This is the newest iteration of the open tag project using Lean startup
@@ -106,7 +100,8 @@ const int ir_receiver_pin_2 = 8;             //IR receiver 2 on pin 8. Active lo
 const int ir_receiver_pin_3 = 7;             //IR receiver 3 on pin 7. Active low.
 const int ir_receiver_pin_4 = 6;             //IR receiver 4 on pin 6. Active low.
 const int ir_receiver_pin_5 = 4;             //IR receiver 5 on pin 4. Active low.
-const int hit_LED_pin = 5;            //status LED pin, turn on when hit
+const int hit_LED_pin = 3;                   //status LED pin, turn on when hit
+const int status_LED_pin = 5;                //status LED pin, for general info
 
 //******** protocol definitions
 const long protocol_duration = 600;         //length of time a bit is send according to protocol in microseconds
@@ -163,6 +158,7 @@ void setup(){
  pinMode(ir_receiver_pin_4, INPUT);
  pinMode(ir_receiver_pin_5, INPUT);
  pinMode(hit_LED_pin,OUTPUT);
+ pinMode(status_LED_pin, OUTPUT);
  if (serial_debug) Serial.begin(9600);   
  if (serial_debug){
    delay(1000);
@@ -198,9 +194,9 @@ void setup(){
    //if I'm trying to tag someone else
    check_if_tagging();
    
-   //now I need to check to see if I need to turn off my LED
+   //now I need to check to see if I need to turn off my LED's
    set_LED(hit_LED_pin, 0, 0);
-   
+   set_LED(status_LED_pin, 0, 0);
    /*
    if (serial_debug){
     Serial.println("looping"); 
@@ -288,6 +284,7 @@ void check_if_tagging( void ){
       //now I want to set my LED high, but not use a delay, so that I can have the code do other
       //stuff
       set_LED(hit_LED_pin, blink_time, 1);
+      set_LED(status_LED_pin, blink_time, 1);
      }
    }
 }
@@ -681,13 +678,48 @@ intput: set_LED_pin is the pin the LED is on (int)
 output: direct control of the LED pin
 *******/
 void set_LED( int set_LED_pin, unsigned long time_set, int start_time){
- //so, I need an internal variable that keeps track of the current time
- static unsigned long LED_off_time;
+ //so, I need an internal variable that keeps track of the current time for each LED
+ static unsigned long LED_off_time_status;
+ static unsigned long LED_off_time_hit;
+ unsigned long LED_off_time;
+ 
+ 
+ //if I'm setting the time, set it.
  if (start_time){
   LED_off_time = millis() + time_set;
   digitalWrite(set_LED_pin, HIGH);
+  //save the time into the correct variable
+    switch (set_LED_pin){
+             case 0:
+               break;
+             case hit_LED_pin:
+               LED_off_time_hit = LED_off_time;
+               break;
+             case status_LED_pin:
+               LED_off_time_status = LED_off_time;
+               break;
+             default:
+              LED_off_time_status = LED_off_time;
+              break; 
+            }
  }
  else{
+   //if I'm not setting time, I'm checking time
+   //pick the correct time to use
+     switch (set_LED_pin){
+         case 0:
+           break;
+         case hit_LED_pin:
+           LED_off_time = LED_off_time_hit;
+           break;
+         case status_LED_pin:
+           LED_off_time = LED_off_time_status;
+           break;
+         default:
+          LED_off_time = LED_off_time_status;
+          break; 
+        } 
+
   if(millis() > LED_off_time){
    digitalWrite(set_LED_pin, LOW); 
   }
