@@ -1,5 +1,5 @@
 /*gukropina 
-March 18, 2015
+April 30, 2015
 Open Tag Developement
 
 Booyah
@@ -7,7 +7,9 @@ Booyah
 Current work:
 
 1. Adding a hit LED and a status LED. I need to update the function that
-checks the LED's status and update the code that calls it.
+checks the LED's status and update the code that calls it. ~semi done
+
+2. My status LED and Hit LED do not turn on at the same time. Can't figure out why
 
 All units are now on a 600 microsec protocol.
 
@@ -102,6 +104,12 @@ const int ir_receiver_pin_4 = 6;             //IR receiver 4 on pin 6. Active lo
 const int ir_receiver_pin_5 = 4;             //IR receiver 5 on pin 4. Active low.
 const int hit_LED_pin = 3;                   //status LED pin, turn on when hit
 const int status_LED_pin = 5;                //status LED pin, for general info
+//WHEN ADDING LED's - add them to the handler as well
+
+//****LED constants
+const int blink_time = 10000;                 //time for one blink of LED in ms
+const int blink_time_fast = 1000; 
+const int num_of_LEDs = 2;                             //number of LED's. For LED_handler function
 
 //******** protocol definitions
 const long protocol_duration = 600;         //length of time a bit is send according to protocol in microseconds
@@ -121,10 +129,10 @@ int debug_array[2][tag_length + 2];                    //for debugging how long 
 //I have two methods of calculating time hit at the moment. I'm using the better one and can delete the old one.
 
 //********** Other constants
-const unsigned long blink_time = 1000;                 //time for one blink of LED in ms
+
 
 //************ receiving definitions
-const int receiving_delay = 5;             //this is the delay in microseconds between reading the signal
+const int RECEIVING_DELAY = 5;             //this is the delay in microseconds between reading the signal
 //not sure I need this delay, but I use it in my receiving a tag code
 
 //const int receiving_error = 0;
@@ -138,11 +146,12 @@ int HEALTH = 5;         //this is the number of times i can be hit before you ca
 //health is an int, so goes from 32,000 to -32,000. Hopefully i don't need to care about overflow...
 
 
+
 /****************
 DEBUGGING
 *****************/
-const int serial_debug = 1;            //Make this 0 for no serial debugging information, 1 for serial debugging
-const int LED_debug = 1;               //Make this 0 if you want the indicator LED to act normally
+const int serial_debug = 0;            //Make this 0 for no serial debugging information, 1 for serial debugging
+const int LED_debug = 0;               //Make this 0 if you want the indicator LED to act normally
                                        //otherwise it will blink if the unit receives a bad code
 
 
@@ -171,7 +180,10 @@ void setup(){
    Serial.println("");
    Serial.print("Protocol duration: ");
    Serial.println(protocol_duration);
-  delay(500);
+   delay(500);
+   //you need to blink every LED to set the variables for them
+   LED_handler(hit_LED_pin, 2, blink_time, 1);
+   LED_handler(status_LED_pin, 2, blink_time, 1);
   } 
  }
  
@@ -195,8 +207,8 @@ void setup(){
    check_if_tagging();
    
    //now I need to check to see if I need to turn off my LED's
-   set_LED(hit_LED_pin, 0, 0);
-   set_LED(status_LED_pin, 0, 0);
+   LED_handler(hit_LED_pin, 0, 0, 0);
+   LED_handler(status_LED_pin, 0, 0, 0);
    /*
    if (serial_debug){
     Serial.println("looping"); 
@@ -242,8 +254,8 @@ void i_am_tagged(void){
  //well, you got tagged. So what happens to you?
  int tagged_me = get_tag_ID( 0, tag_length - 1);   // if I got a good tag, get an int of who tagged me?
  HEALTH = HEALTH--;                       //programmer speak for health = health - 1;
- set_LED(hit_LED_pin, blink_time, 1);     //blink LED 
- 
+ LED_handler(hit_LED_pin, 2, blink_time, 1);               //blink LED 
+ LED_handler(status_LED_pin, HEALTH*2, blink_time_fast, 1);     //blink status of health
  //for now, I just want to print out who tagged me
  if(serial_debug){
    Serial.print("Who tagged me: ");
@@ -283,9 +295,12 @@ void check_if_tagging( void ){
       send_tag();                       //run tagging code
       //now I want to set my LED high, but not use a delay, so that I can have the code do other
       //stuff
-      set_LED(hit_LED_pin, blink_time, 1);
-      set_LED(status_LED_pin, blink_time, 1);
+      LED_handler(hit_LED_pin, 2, blink_time, 1);
+      LED_handler(status_LED_pin, 2, blink_time, 1);
      }
+   }
+   else{
+     LED_handler(status_LED_pin, 2, blink_time, 1);
    }
 }
 
@@ -536,10 +551,10 @@ int read_protocol(int Pin_Read, int i) {
  int count = 0;                                //this counts how many times I will have my delay
  int unsigned long microsec_start = micros();  //this counts microseconds using a timer
  while (ir_receiver == 0){
-   count++;
-  //while the receiver is still receiving a signal 
-   delayMicroseconds(receiving_delay);         //delay for a bit. you know. you can't check constantly
-   ir_receiver = digitalRead(Pin_Read); //see if the IR receiver pin has changed
+   //count++;
+   //while the receiver is still receiving a signal 
+   delayMicroseconds(RECEIVING_DELAY);         //delay for a bit. you know. you can't check constantly
+   ir_receiver = digitalRead(Pin_Read);        //see if the IR receiver pin has changed
    //digital read takes about 3 microseconds
  }
    //now that I have the time that I waited for, I need to return which protocol singal it was
@@ -669,66 +684,175 @@ void blink_LED(int blink_LED_pin, int delay_time, int num_blinks){
 }
 
 /*******
-set_LED
-This function will turn off an LED in a set period of time, using the millis()
+set_LED_status
+This function will turn off the status LED in a set period of time, using the millis()
 function. This will check to see whether or not I need to turn on/off an LED
 intput: set_LED_pin is the pin the LED is on (int)
         time_set is the time to turn off LED from now in milliseconds (int)
-        start_time is whether or not to start timing from here or not (1 for starting, 0 for not)
+        blinks is the number of times to cycle LED (2 = on and then off)
+           blinks = 0 if you are checking to see if you should blink
 output: direct control of the LED pin
-*******/
-void set_LED( int set_LED_pin, unsigned long time_set, int start_time){
+*******
+void set_LED( int set_LED_pin, unsigned long time_set, int blinks){
  //so, I need an internal variable that keeps track of the current time for each LED
- static unsigned long LED_off_time_status;
- static unsigned long LED_off_time_hit;
- unsigned long LED_off_time;
- 
+ static unsigned long LED_off_time;
+ static int num_blinks;
+ static int blink_time;
  
  //if I'm setting the time, set it.
- if (start_time){
-  LED_off_time = millis() + time_set;
-  digitalWrite(set_LED_pin, HIGH);
-  //save the time into the correct variable
-    switch (set_LED_pin){
-             case 0:
-               break;
-             case hit_LED_pin:
-               LED_off_time_hit = LED_off_time;
-               break;
-             case status_LED_pin:
-               LED_off_time_status = LED_off_time;
-               break;
-             default:
-              LED_off_time_status = LED_off_time;
-              break; 
-            }
+ if (blinks > 0){
+  LED_off_time = millis() + time_set;    //set the time to turn off
+  change_LED(set_LED_pin);               //change state of LED
+  num_blinks = blinks - 1;               //save blinks to go (minus first)
+  blink_time = time_set;                 //save time in between blinks
+  if(serial_debug){
+    Serial.println("set blinking");
+    }
  }
  else{
    //if I'm not setting time, I'm checking time
-   //pick the correct time to use
-     switch (set_LED_pin){
-         case 0:
-           break;
-         case hit_LED_pin:
-           LED_off_time = LED_off_time_hit;
-           break;
-         case status_LED_pin:
-           LED_off_time = LED_off_time_status;
-           break;
-         default:
-          LED_off_time = LED_off_time_status;
-          break; 
-        } 
-
-  if(millis() > LED_off_time){
-   digitalWrite(set_LED_pin, LOW); 
+   if(num_blinks > 0){
+    if(millis() > LED_off_time){
+      //I'm checking time, and it is time to switch the input
+      change_LED(set_LED_pin);               //change state of LED
+      //now that I've changed the pin state, I need to record that in my variables
+      num_blinks -= num_blinks;        //decrement number of blinks
+      //if number of blinks is greater than 0, then set up to blink again
+      if(num_blinks > 0){
+        LED_off_time = millis() + blink_time;
+        if(serial_debug) Serial.println("more blinks");
+        }
+     else{
+       if(serial_debug) Serial.println("no more blinks");
+       }   
+      }
+   }
+     //i'm done checking if I"m supposed to switch time at these parenthesis 
   }
  }
+ */
+ 
+
+/******
+LED_handler
+This function will keep track of the following:
+Time that every LED needs to switch state
+Number of times the LED needs to switch state
+Duration that each LED needs to switch state for
+It will use this information to call the appropriate function to check each LED.
+Those functions will turn LED's on and off
+It will be called every loop, or to set data for certain pins
+intpus: handler_LED_pin - (int) the LED pin that I am manipulating
+        handler_blinks - (int) the number of times that pin should blink
+        handler_blink_time - (int) time in milliseconds that the LED should blink for
+outputs: changes output of LED's
+*****/
+
+void LED_handler( int handler_LED_pin, int handler_blinks, int handler_blink_time, int set_LED){
+ static unsigned long LED_change_time[num_of_LEDs];     //keep track of time to turn all LED's on or off
+ static int LED_blinks[num_of_LEDs];          //keeps track of the number of blinks
+ static int LED_blink_time[num_of_LEDs];      //keeps track of time to blink LED's
+ int i;                                       //internal variable for each LED
+ int changed_LED;                             //variable to see if I changed LED, 1 if changed, 0 if not
+ 
+ //figure out which pin I'm working with, and use that one
+ switch(handler_LED_pin){
+  case hit_LED_pin:
+    i = 0;
+    break;
+  case status_LED_pin:
+    i = 1;
+    break;
+  default:
+    i = 1;
+    break;
+ }
+ 
+ //if I'm setting variables, then set them
+ if(set_LED){
+   LED_change_time[i] = millis() + handler_blink_time;   //set time to change LED
+   LED_blinks[i] = handler_blinks;                       //set number of blinks
+   LED_blink_time[i] = handler_blink_time;               //set time between blinks
+   if(serial_debug){
+     Serial.print("set LED ");
+     Serial.println(i);
+     delay(500);
+   }
+   digitalWrite(handler_LED_pin, LOW);                   //reset LED to beginning
+ }
+ else{
+ //if I'm not setting, then I'm checking
+ //first, see if I should change the state
+ if(LED_blinks[i] > 0){
+   changed_LED = check_LED( handler_LED_pin, LED_change_time[i]);
+   if(serial_debug){
+       Serial.print("checked LED ");
+       Serial.println(i);
+       delay(50);
+       if(changed_LED) Serial.println("I switched LED states");
+       delay(500);
+     }
+   //if I changed the LED, I need to update the times
+   if(changed_LED){
+    LED_blinks[i] = LED_blinks[i] - 1;                  //decrement number of blinks
+    if(serial_debug){
+     Serial.print("Number of blinks left ");
+     Serial.println(LED_blinks[i]); 
+     delay(500);
+    }
+    //now I want to see if I should set the time to change the LED again
+    if(LED_blinks[i] > 0){
+      LED_change_time[i] = millis() + LED_blink_time[i];
+      if(serial_debug) Serial.println("Set for next Blink");
+      //I'm adding an unsigned long and an int...is arduino ok with that?
+      }
+    }
+  }
+ }
+ //I'm done hanglind LED's  
  //when millis() overflows, this code will keep a light on until you reset it. but hey, 
  //that'll happen almost never.
  //unless you don't turn the unit off for over a month (50 days ish)
- return;
 }
 
+/*******
+check_LED
+This will check to see whether or not I need to turn on/off an LED and do so if need be
+intput: set_LED_pin - (int) is the pin the LED is on (int)
+        time_switch - (unsigned long) is the time to turn off LED in milliseconds
+output: 0 if I did not change the pin
+        1 if I did change the pin
+*******/
+int check_LED( int set_LED_pin, unsigned long time_switch){
+  //see if I have passed the time
+  if(millis() > time_switch){
+    change_LED(set_LED_pin);               //change state of LED
+    //if(serial_debug) Serial.println("change LED");
+    return 1;
+  }
+ else{
+   return 0;
+   }   
+ }
+
+ /*****
+ change_LED
+ changes the state of an LED on a pin
+ inputs: pin to manipulate
+ outputs: void
+          changes state of pin
+******/
+void change_LED(int LED_pin){
+ //get the current state
+ int state = digitalRead(LED_pin); 
+ if(state){
+   //if the LED is HIGH
+   digitalWrite(LED_pin, LOW);
+ }
+ else{
+  //otherwise, turn LED HIGH
+  digitalWrite(LED_pin, HIGH); 
+ }
+}
 
 //insert coded stuff here, you know :)
