@@ -107,8 +107,8 @@ const int status_LED_pin = 5;                //status LED pin, for general info
 //WHEN ADDING LED's - add them to the handler as well
 
 //****LED constants
-const int blink_time = 10000;                 //time for one blink of LED in ms
-const int blink_time_fast = 1000; 
+const int blink_time = 1000;                 //time for one blink of LED in ms
+const int blink_time_fast = 200; 
 const int num_of_LEDs = 2;                             //number of LED's. For LED_handler function
 
 //******** protocol definitions
@@ -254,8 +254,8 @@ void i_am_tagged(void){
  //well, you got tagged. So what happens to you?
  int tagged_me = get_tag_ID( 0, tag_length - 1);   // if I got a good tag, get an int of who tagged me?
  HEALTH = HEALTH--;                       //programmer speak for health = health - 1;
- LED_handler(hit_LED_pin, 2, blink_time, 1);               //blink LED 
- LED_handler(status_LED_pin, HEALTH*2, blink_time_fast, 1);     //blink status of health
+ LED_handler(hit_LED_pin, 2, blink_time, 1);                                   //blink LED 
+ if(HEALTH > 0) LED_handler(status_LED_pin, HEALTH*2, blink_time_fast, 1);     //blink status of health
  //for now, I just want to print out who tagged me
  if(serial_debug){
    Serial.print("Who tagged me: ");
@@ -289,19 +289,20 @@ void check_if_tagging( void ){
    }
   } 
     
-  if(HEALTH > 0){
-     if (button_changed){          //see if button changed state
-     //if so, I am pushing the button for the first time, do something
-      send_tag();                       //run tagging code
-      //now I want to set my LED high, but not use a delay, so that I can have the code do other
-      //stuff
-      LED_handler(hit_LED_pin, 2, blink_time, 1);
-      LED_handler(status_LED_pin, 2, blink_time, 1);
-     }
-   }
-   else{
-     LED_handler(status_LED_pin, 2, blink_time, 1);
-   }
+  if(button_changed){          //if I'm trying to fire
+     if (HEALTH > 0){          //and I have health
+       //if so, I am pushing the button for the first time, do something
+       send_tag();                       //run tagging code
+       //now I want to set my LED high, but not use a delay, so that I can have the code do other
+       //stuff
+       LED_handler(hit_LED_pin, 2, blink_time, 1);
+       LED_handler(status_LED_pin, 2, blink_time, 1);
+       }
+     else{
+       //if I try to fire and don't have health, do something
+       LED_handler(status_LED_pin, 6, blink_time, 1);       //for now, I will blink 3 times.
+       }
+   }  
 }
 
 /**************
@@ -770,13 +771,13 @@ void LED_handler( int handler_LED_pin, int handler_blinks, int handler_blink_tim
  
  //if I'm setting variables, then set them
  if(set_LED){
-   LED_change_time[i] = millis() + handler_blink_time;   //set time to change LED
+   LED_change_time[i] = millis();                        //set time to change LED
    LED_blinks[i] = handler_blinks;                       //set number of blinks
    LED_blink_time[i] = handler_blink_time;               //set time between blinks
    if(serial_debug){
      Serial.print("set LED ");
      Serial.println(i);
-     delay(500);
+     delay(50);
    }
    digitalWrite(handler_LED_pin, LOW);                   //reset LED to beginning
  }
@@ -790,7 +791,7 @@ void LED_handler( int handler_LED_pin, int handler_blinks, int handler_blink_tim
        Serial.println(i);
        delay(50);
        if(changed_LED) Serial.println("I switched LED states");
-       delay(500);
+       delay(50);
      }
    //if I changed the LED, I need to update the times
    if(changed_LED){
@@ -798,7 +799,7 @@ void LED_handler( int handler_LED_pin, int handler_blinks, int handler_blink_tim
     if(serial_debug){
      Serial.print("Number of blinks left ");
      Serial.println(LED_blinks[i]); 
-     delay(500);
+     delay(50);
     }
     //now I want to see if I should set the time to change the LED again
     if(LED_blinks[i] > 0){
