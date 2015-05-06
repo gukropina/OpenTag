@@ -1,15 +1,19 @@
 /*gukropina 
-April 30, 2015
+May 5, 2015
 Open Tag Developement
 
 Booyah
 
 Current work:
 
-1. Adding a hit LED and a status LED. I need to update the function that
-checks the LED's status and update the code that calls it. ~semi done
-
-2. My status LED and Hit LED do not turn on at the same time. Can't figure out why
+1. Adding unique attack modifiers to pre-empt adding bases
+  A. to do this, I need to have the send_tag function build the tag to send out of:
+  tag_ID
+  damage
+  unique attack modifier
+  -UNTESTED
+  B. I also need to parse the tag received array to get the correct parts out
+  -UNTESTED
 
 All units are now on a 600 microsec protocol.
 
@@ -75,14 +79,6 @@ The receiver that I am using is active low. So receiving a signal is low.
 */
 
 
-/*
-Degugging notes:
-(These are old notes)
-Serial data is being sent normally.
-The send pulse function is working.
-The send_tag function checks for new button presses correctly
-*/
-
 /*******
 Libraries
 *****/
@@ -114,7 +110,11 @@ const int num_of_LEDs = 2;                             //number of LED's. For LE
 //******** protocol definitions
 const long protocol_duration = 600;         //length of time a bit is send according to protocol in microseconds
 const int timeout = 30;                      //timeout in milliseconds. If i don't receive aything, I'm done
-const int tag_length = 2;                    //number of bits in the tag
+//for this to work: tag_length = tag_ID_length + tag_UAM_length + tag_damage_length
+const int tag_length = 3;                    //number of bits in the tag
+const int tag_ID_length = 2;                 //number of bits in the tag that are for the tag ID (first)
+//const int tag_damage_length = 0;             //number of bits in the tag that are for tag damage
+const int tag_UAM_length = 1;                //number of bits in the tag that are for the unique attack modifier
 
 const long protocol_start = 3*protocol_duration;           //start signal
 const long protocol_one = 2*protocol_duration;             // 1
@@ -123,7 +123,10 @@ const long protocol_end = 4*protocol_duration;             // end signal
 
 //when I make this game with bases, my ID can be given by the base
 //for now, I enter my ID in binary below
-int tag_ID_array[tag_length] = {0, 1};                  // this will give me tag_length bits
+int tag_sent_array[tag_length] = {0, 1, 0};            //this sets the tag you send
+int tag_ID_array[tag_ID_length] = {0, 1};              // this sets the tag ID in binary
+//int tag_damage_array[tag_damage_length] = {0, 1};          // this sets the tag damage in binary
+int tag_UAM_array[tag_ID_length] = {0};                // this sets the tag unique attack modifier in binary
 int tag_received_array[tag_length];                    // array for tags I receive
 int debug_array[2][tag_length + 2];                    //for debugging how long of a signal I got
 //I have two methods of calculating time hit at the moment. I'm using the better one and can delete the old one.
@@ -143,6 +146,7 @@ const int RECEIVING_DELAY = 5;             //this is the delay in microseconds b
 
 //******GLOBAL VARIABLES*****
 int HEALTH = 5;         //this is the number of times i can be hit before you can't tag
+int MAX_HEALTH = 5;     //this is the max health that you can have (you spawn with max health)
 //health is an int, so goes from 32,000 to -32,000. Hopefully i don't need to care about overflow...
 
 
@@ -252,14 +256,26 @@ outputs: void
 ********/
 void i_am_tagged(void){
  //well, you got tagged. So what happens to you?
- int tagged_me = get_tag_ID( 0, tag_length - 1);   // if I got a good tag, get an int of who tagged me?
- HEALTH = HEALTH--;                       //programmer speak for health = health - 1;
- LED_handler(hit_LED_pin, 2, blink_time, 1);                                   //blink LED 
- if(HEALTH > 0) LED_handler(status_LED_pin, HEALTH*2, blink_time_fast, 1);     //blink status of health
+ //first, figure out who tagged you, how much damage, and what unique attack modifier
+ int tagged_me = get_tag_ID( 0, tag_ID_length - 1);   
+ int unique_attack_modifier = get_tag_ID(tag_ID_length, tag_ID_length + tag_UAM_length - 1);
+ 
+ if(unique_attack_modifier == 0){
+   HEALTH = HEALTH--;                       //programmer speak for health = health - 1;
+   LED_handler(hit_LED_pin, 2, blink_time, 1);                                   //blink LED 
+   if(HEALTH > 0) LED_handler(status_LED_pin, HEALTH*2, blink_time_fast, 1);     //blink status of health
+   }
+ else if(unique_attack_modifier == 1){
+   HEALTH = MAX_HEALTH;                             //if I'm hit by the base, regain health
+   LED_handler(status_LED_pin, HEALTH*2, blink_time_fast, 1);     //blink status of health
+   }
+ 
  //for now, I just want to print out who tagged me
  if(serial_debug){
    Serial.print("Who tagged me: ");
    Serial.println(tagged_me);
+   Serial.print("Unique Attack Modifier: ");
+   Serial.println(unique_attack_modifier);
    Serial.print("Health: ");
    Serial.println(HEALTH);
    Serial.println(" ");
@@ -309,13 +325,30 @@ void check_if_tagging( void ){
 send_tag
 sends the ID number and the checksum according to the protocol
 This outputs the correct sequence of pulses to the pin that has the IR LED
+inputs: None. this uses the global arrays:
+tag_ID_array, tag_damage_array, tag_UAM_array
+outputs: outputs onto ir_LED_pin the correct procol to send a tag
 *****************/
 void send_tag(void){
+  //first, I need to set up my tag_sent_array with the correct tag to send
+  for (int i=0; i < tag_length; i++){
+    if(i < tag_ID_length){
+      tag_sent_array[i] = tag_ID_array[i];
+      }
+    else if(i < tag_ID_length + tag_UAM_length){
+      tag_sent_array[i] = tag_UAM_array[i - tag_ID_length];
+      }
+    }
+  if (serial_debug){
+    Serial.print("tag to send is: {");
+    int i;
+    for(i=0; i < tag_length; i++){
+      Serial.print(tag_sent_array[i]);
+      Serial.print(", "); 
+      }
+    Serial.println("}");
+  }
   /*
-  The micros() function uses interrupts to update. In order to send a pulse
-  and use the micros() function, I need to enable inerrupts in the send_pulse()
-  function, which may screw up the timing of that function because it is then
-  interrupted every 4 microseconds.
   unsigned long microsec_debug_start;
   unsigned long microsec_debug;
   microsec_debug_start = micros();  //save current microseconds time
@@ -325,17 +358,15 @@ void send_tag(void){
   //microsec_debug = micros() - microsec_debug_start;    //save difference in microseconds
   delayMicroseconds(protocol_duration);         //protocol delay, like the protocol dictates
   for (int i=0; i < tag_length; i++){           //for each bit in the tag_ID_Array
-    if (tag_ID_array[i] == 0){                  // if the bit is a 0, send a 0
-      //I'm sending a 0
-      send_pulse(protocol_zero);
+    if (tag_sent_array[i] == 0){                // if the bit is a 0, send a 0
+      send_pulse(protocol_zero);                //I'm sending a 0
     }
-    else if (tag_ID_array[i] == 1){             //if the bit is a 1, send a 1
-      //I'm sending a 1
-      send_pulse(protocol_one);
+    else if (tag_sent_array[i] == 1){           //if the bit is a 1, send a 1
+      send_pulse(protocol_one);                 //I'm sending a 1
       }
-   delayMicroseconds(protocol_duration);               //after each bit, wait (as the protocol dictates)
+   delayMicroseconds(protocol_duration);        //after each bit, wait (as the protocol dictates)
    }
-   //at the end, I have sent start, all of my bits, and a space. Now I need to send the end command
+   //after the loop, I have sent start, all of my bits, and a delay. Now I need to send the end command
    send_pulse(protocol_end);
    delayMicroseconds(protocol_duration);
    //I was seeing an echo, I saw my own tag that I sent out. I'm adding a delay at the end
@@ -356,6 +387,11 @@ send_pulse
 sends an IR signal to a receiver, making the receiver low
 input is the amount of time to send the signal in microseconds
 The output is writing the IR_LED pin high and low for the pulse duration
+
+Note:   The micros() function uses interrupts to update. In order to send a pulse
+  and use the micros() function, I need to enable inerrupts in the send_pulse()
+  function, which may screw up the timing of that function because it is then
+  interrupted every 4 microseconds.
 **********/
 void send_pulse(long pulse_duration){
   Timer1.pwm(ir_LED_pin, 512);           //send pulse
