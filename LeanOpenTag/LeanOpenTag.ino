@@ -4,6 +4,8 @@ Open Tag Developement
 
 Booyah
 
+Note: Are you uploading to the correct board?
+
 Current work:
 
 1. Adding unique attack modifiers to pre-empt adding bases
@@ -174,21 +176,22 @@ void setup(){
  pinMode(status_LED_pin, OUTPUT);
  if (serial_debug) Serial.begin(9600);   
  if (serial_debug){
-   delay(1000);
+  delay(1000);
   Serial.print("tag to send is: ");
   int i;
   for(i=0; i < tag_length; i++){
-   Serial.print(tag_ID_array[i]);
-   Serial.print(", "); 
-  }
+    Serial.print(tag_sent_array[i]);
+    Serial.print(", "); 
+    }
    Serial.println("");
    Serial.print("Protocol duration: ");
    Serial.println(protocol_duration);
    delay(500);
    //you need to blink every LED to set the variables for them
-   LED_handler(hit_LED_pin, 2, blink_time, 1);
-   LED_handler(status_LED_pin, 2, blink_time, 1);
-  } 
+   //delay(500);
+   }
+  LED_handler(hit_LED_pin, 2, blink_time_fast, 1);
+  LED_handler(status_LED_pin, 2, blink_time_fast, 1); 
  }
  
  
@@ -213,12 +216,14 @@ void setup(){
    //now I need to check to see if I need to turn off my LED's
    LED_handler(hit_LED_pin, 0, 0, 0);
    LED_handler(status_LED_pin, 0, 0, 0);
+   
    /*
    if (serial_debug){
     Serial.println("looping"); 
     delay(500);
    }
    */
+   
  }
  
  /******
@@ -810,11 +815,13 @@ void LED_handler( int handler_LED_pin, int handler_blinks, int handler_blink_tim
    LED_change_time[i] = millis();                        //set time to change LED
    LED_blinks[i] = handler_blinks;                       //set number of blinks
    LED_blink_time[i] = handler_blink_time;               //set time between blinks
+   /*
    if(serial_debug){
      Serial.print("set LED ");
      Serial.println(i);
      delay(50);
    }
+   */
    digitalWrite(handler_LED_pin, LOW);                   //reset LED to beginning
  }
  else{
@@ -822,6 +829,7 @@ void LED_handler( int handler_LED_pin, int handler_blinks, int handler_blink_tim
  //first, see if I should change the state
  if(LED_blinks[i] > 0){
    changed_LED = check_LED( handler_LED_pin, LED_change_time[i]);
+   /*
    if(serial_debug){
        Serial.print("checked LED ");
        Serial.println(i);
@@ -829,18 +837,21 @@ void LED_handler( int handler_LED_pin, int handler_blinks, int handler_blink_tim
        if(changed_LED) Serial.println("I switched LED states");
        delay(50);
      }
+     */
    //if I changed the LED, I need to update the times
    if(changed_LED){
     LED_blinks[i] = LED_blinks[i] - 1;                  //decrement number of blinks
+    /*
     if(serial_debug){
      Serial.print("Number of blinks left ");
      Serial.println(LED_blinks[i]); 
      delay(50);
     }
+    */
     //now I want to see if I should set the time to change the LED again
     if(LED_blinks[i] > 0){
       LED_change_time[i] = millis() + LED_blink_time[i];
-      if(serial_debug) Serial.println("Set for next Blink");
+      //if(serial_debug) Serial.println("Set for next Blink");
       //I'm adding an unsigned long and an int...is arduino ok with that?
       }
     }
