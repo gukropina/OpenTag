@@ -1,5 +1,5 @@
 /*gukropina 
-May 5, 2015
+May 23, 2015
 Open Tag Developement
 
 Booyah
@@ -8,14 +8,11 @@ Note: Are you uploading to the correct board?
 
 Current work:
 
-1. Adding unique attack modifiers to pre-empt adding bases
-  A. to do this, I need to have the send_tag function build the tag to send out of:
-  tag_ID
-  damage
-  unique attack modifier
-  -UNTESTED
-  B. I also need to parse the tag received array to get the correct parts out
-  -UNTESTED
+Added piezo to add sounds to the game (3 sounds, tag sent, hit, and can't tag)
+Haven't added some sort of handler for interrupting sounds, so sounds are short.
+
+Do next: Create a base.
+         Build a unit with sound.
 
 All units are now on a 600 microsec protocol.
 
@@ -87,6 +84,9 @@ Libraries
 #include <TimerOne.h>
 //the Timer 1 library makes it easy to control hardware timer 1 on the arduino.
 
+#include "pitches.h"
+//the pitches library that defines musical notes' frequency
+
 /*****************
 Variables and Constants
 ******************/
@@ -102,6 +102,8 @@ const int ir_receiver_pin_4 = 6;             //IR receiver 4 on pin 6. Active lo
 const int ir_receiver_pin_5 = 4;             //IR receiver 5 on pin 4. Active low.
 const int hit_LED_pin = 3;                   //status LED pin, turn on when hit
 const int status_LED_pin = 5;                //status LED pin, for general info
+const int piezo_pin = 2;                     //piezo
+
 //WHEN ADDING LED's - add them to the handler as well
 
 //****LED constants
@@ -274,6 +276,26 @@ void i_am_tagged(void){
    HEALTH = MAX_HEALTH;                             //if I'm hit by the base, regain health
    LED_handler(status_LED_pin, HEALTH*2, blink_time_fast, 1);     //blink status of health
    }
+   
+ //make a sound now that I'm hit
+   tone(piezo_pin, NOTE_D6);
+   delay(25);
+   noTone(piezo_pin);
+   
+   delay(10);
+   tone(piezo_pin, NOTE_D4);
+   delay(25);
+   noTone(piezo_pin);
+   
+   delay(10);
+   tone(piezo_pin, NOTE_D8);
+   delay(25);
+   noTone(piezo_pin);
+   
+   delay(10);
+   tone(piezo_pin, NOTE_D4);
+   delay(25);
+   noTone(piezo_pin);
  
  //for now, I just want to print out who tagged me
  if(serial_debug){
@@ -318,10 +340,42 @@ void check_if_tagging( void ){
        //stuff
        LED_handler(hit_LED_pin, 2, blink_time, 1);
        LED_handler(status_LED_pin, 2, blink_time, 1);
+       
+       //make a sound
+       
+        for (int i = 4000; i < 5000; i++){
+           tone(piezo_pin, i);
+           delay(5);
+           noTone(piezo_pin);
+           i = i + 250;
+         }
+         
+         delay(10);
+         tone(piezo_pin, 5000);
+         delay(25);
+         noTone(piezo_pin);
+         
+         for (int i = 5000; i > 2000; i--){
+           tone(piezo_pin, i);
+           delay(5);
+           noTone(piezo_pin);
+           i = i - 250;
+         }
+       
        }
      else{
        //if I try to fire and don't have health, do something
        LED_handler(status_LED_pin, 6, blink_time, 1);       //for now, I will blink 3 times.
+       
+       //and make a can't send tag sound
+       tone(piezo_pin, NOTE_A3);
+       delay(25);
+       noTone(piezo_pin);
+       delay(10);
+       tone(piezo_pin, NOTE_A2);
+       delay(25);
+       noTone(piezo_pin);
+       
        }
    }  
 }
