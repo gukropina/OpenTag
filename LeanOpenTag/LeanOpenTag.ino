@@ -11,8 +11,19 @@ Current work:
 Added piezo to add sounds to the game (3 sounds, tag sent, hit, and can't tag)
 Haven't added some sort of handler for interrupting sounds, so sounds are short.
 
-Do next: Create a base.
-         Build a unit with sound.
+Do next: 1. add the next two parts of your protocol: team and damage
+            to do this, you need to change: variables, i_am_tagged, send_tag
+         2. Make sure piezo_handler function is working
+         3. Change your send_tag arrays to all caps for global variables
+         4. Base: make it so that if you are a base, and receive a tag w/ different team,
+            you take 1 damage. At health = 0, you switch teams and have 1 health
+            If you take damage from your own team, you gain health (up to max).
+         5. Your send_tag function will need to be more complex to handle abilities, 
+            and then send regular tags afterwards. Or maybe, before tagging, rebuild
+            the arrays from defaults (or at least check them all).
+         6. True PWM from LED Handler: You need to add on and off time for LED handler
+            that way, you can dim LED's, and do true PWM without really using PWM.
+            Then change health to status LED brightness, and have status LED always on.
 
 All units are now on a 600 microsec protocol.
 
@@ -117,8 +128,10 @@ const int timeout = 30;                      //timeout in milliseconds. If i don
 //for this to work: tag_length = tag_ID_length + tag_UAM_length + tag_damage_length
 const int tag_length = 3;                    //number of bits in the tag
 const int tag_ID_length = 2;                 //number of bits in the tag that are for the tag ID (first)
-//const int tag_damage_length = 0;             //number of bits in the tag that are for tag damage
+//const int tag_team_length = 2;               //number of bits in the tag that are for team ID
+//const int tag_damage_length = 2;             //number of bits in the tag that are for tag damage
 const int tag_UAM_length = 1;                //number of bits in the tag that are for the unique attack modifier
+//Note: when you add team and damage, you need to change I am tagged, send_tag, and Base_handler functions
 
 const long protocol_start = 3*protocol_duration;           //start signal
 const long protocol_one = 2*protocol_duration;             // 1
@@ -129,6 +142,7 @@ const long protocol_end = 4*protocol_duration;             // end signal
 //for now, I enter my ID in binary below
 int tag_sent_array[tag_length] = {0, 1, 0};            //this sets the tag you send
 int tag_ID_array[tag_ID_length] = {0, 1};              // this sets the tag ID in binary
+//int tag_team_array[tag_team_length] = {0, 1};              // this sets the team number in binary (0 for base)
 //int tag_damage_array[tag_damage_length] = {0, 1};          // this sets the tag damage in binary
 int tag_UAM_array[tag_ID_length] = {0};                // this sets the tag unique attack modifier in binary
 int tag_received_array[tag_length];                    // array for tags I receive
@@ -152,6 +166,9 @@ const int RECEIVING_DELAY = 5;             //this is the delay in microseconds b
 int HEALTH = 5;         //this is the number of times i can be hit before you can't tag
 int MAX_HEALTH = 5;     //this is the max health that you can have (you spawn with max health)
 //health is an int, so goes from 32,000 to -32,000. Hopefully i don't need to care about overflow...
+int BASE_HEALTH = 20;     //this is the health of the base
+int MAX_BASE_HEALTH = 20; //this is the max health of the base
+int BASE_ID = 1;          //this is the team that the base is on
 
 
 
@@ -161,21 +178,22 @@ DEBUGGING
 const int serial_debug = 0;            //Make this 0 for no serial debugging information, 1 for serial debugging
 const int LED_debug = 0;               //Make this 0 if you want the indicator LED to act normally
                                        //otherwise it will blink if the unit receives a bad code
-
+const int I_AM_A_BASE = 0;             //Make this 0 if you are a player, 1 if you are a base
 
 
 void setup(){
  Timer1.initialize(26);            //start a timer with a period of 26 microseconds, or about 38.5 kHz
  //not sure if this is necessary, but hey, why not? 
  pinMode(button_pin, INPUT); 
- pinMode(ir_LED_pin, OUTPUT);
  pinMode(ir_receiver_pin_1, INPUT);
  pinMode(ir_receiver_pin_2, INPUT);
  pinMode(ir_receiver_pin_3, INPUT);
  pinMode(ir_receiver_pin_4, INPUT);
  pinMode(ir_receiver_pin_5, INPUT);
+ pinMode(ir_LED_pin, OUTPUT);
  pinMode(hit_LED_pin,OUTPUT);
  pinMode(status_LED_pin, OUTPUT);
+ pinMode(piezo_pin, OUTPUT);
  if (serial_debug) Serial.begin(9600);   
  if (serial_debug){
   delay(1000);
@@ -194,6 +212,7 @@ void setup(){
    }
   LED_handler(hit_LED_pin, 2, blink_time_fast, 1);
   LED_handler(status_LED_pin, 2, blink_time_fast, 1); 
+  if(I_AM_A_BASE) Base_Handler_Function(999);   //if I'm a base, start the base up!
  }
  
  
@@ -225,7 +244,7 @@ void setup(){
     delay(500);
    }
    */
-   
+   if(I_AM_A_BASE) Base_Handler_Function( 0 );
  }
  
  /******
@@ -278,24 +297,8 @@ void i_am_tagged(void){
    }
    
  //make a sound now that I'm hit
-   tone(piezo_pin, NOTE_D6);
-   delay(25);
-   noTone(piezo_pin);
+ Piezo_Handler(1);   //1 is code for i was hit
    
-   delay(10);
-   tone(piezo_pin, NOTE_D4);
-   delay(25);
-   noTone(piezo_pin);
-   
-   delay(10);
-   tone(piezo_pin, NOTE_D8);
-   delay(25);
-   noTone(piezo_pin);
-   
-   delay(10);
-   tone(piezo_pin, NOTE_D4);
-   delay(25);
-   noTone(piezo_pin);
  
  //for now, I just want to print out who tagged me
  if(serial_debug){
@@ -342,39 +345,14 @@ void check_if_tagging( void ){
        LED_handler(status_LED_pin, 2, blink_time, 1);
        
        //make a sound
-       
-        for (int i = 4000; i < 5000; i++){
-           tone(piezo_pin, i);
-           delay(5);
-           noTone(piezo_pin);
-           i = i + 250;
-         }
-         
-         delay(10);
-         tone(piezo_pin, 5000);
-         delay(25);
-         noTone(piezo_pin);
-         
-         for (int i = 5000; i > 2000; i--){
-           tone(piezo_pin, i);
-           delay(5);
-           noTone(piezo_pin);
-           i = i - 250;
-         }
-       
+       Piezo_Handler(0);   //0 is code for I am sending a tag
        }
      else{
        //if I try to fire and don't have health, do something
        LED_handler(status_LED_pin, 6, blink_time, 1);       //for now, I will blink 3 times.
        
        //and make a can't send tag sound
-       tone(piezo_pin, NOTE_A3);
-       delay(25);
-       noTone(piezo_pin);
-       delay(10);
-       tone(piezo_pin, NOTE_A2);
-       delay(25);
-       noTone(piezo_pin);
+       Piezo_Handler(2);   //2 is piezo code for can't tag
        
        }
    }  
@@ -882,6 +860,7 @@ void LED_handler( int handler_LED_pin, int handler_blinks, int handler_blink_tim
  //if I'm not setting, then I'm checking
  //first, see if I should change the state
  if(LED_blinks[i] > 0){
+   //first, call a function to check to see if I need to switch the LED state (on or off)
    changed_LED = check_LED( handler_LED_pin, LED_change_time[i]);
    /*
    if(serial_debug){
@@ -955,6 +934,114 @@ void change_LED(int LED_pin){
   //otherwise, turn LED HIGH
   digitalWrite(LED_pin, HIGH); 
  }
+}
+
+/*******
+Piezo_Handler
+This function controls all of the piezo sounds
+input: sound to play (integer)
+output: sound on the Piezo
+Sounds:
+  0: send tag
+  1: received tag
+  2: cannot tag
+*******/
+
+void Piezo_Handler(int sound){
+  switch(sound){
+  case 0:    //send tag sound
+      for (int i = 4000; i < 5000; i++){
+         tone(piezo_pin, i);
+         delay(5);
+         noTone(piezo_pin);
+         i = i + 250;
+       }
+       
+       delay(10);
+       tone(piezo_pin, 5000);
+       delay(25);
+       noTone(piezo_pin);
+       
+       for (int i = 5000; i > 2000; i--){
+         tone(piezo_pin, i);
+         delay(5);
+         noTone(piezo_pin);
+         i = i - 250;
+       }
+      break;
+  case 1:    //received tag sound
+     tone(piezo_pin, NOTE_D6);
+     delay(25);
+     noTone(piezo_pin);
+     
+     delay(10);
+     tone(piezo_pin, NOTE_D4);
+     delay(25);
+     noTone(piezo_pin);
+     
+     delay(10);
+     tone(piezo_pin, NOTE_D8);
+     delay(25);
+     noTone(piezo_pin);
+     
+     delay(10);
+     tone(piezo_pin, NOTE_D4);
+     delay(25);
+     noTone(piezo_pin);
+     break;
+  case 2:    //cannot tag sound
+     tone(piezo_pin, NOTE_A3);
+     delay(25);
+     noTone(piezo_pin);
+     
+     delay(10);
+     tone(piezo_pin, NOTE_A2);
+     delay(25);
+     noTone(piezo_pin);   
+     break;
+  default:
+    break;
+ }
+}
+
+/****
+Base_Handler_Function()
+This function handles all of my base interactions. For now, it is going to send out a heal tag
+every 250 milliseconds. If team = 999, then I start sending out signals.
+inputs: team person who tagged base is on (int)
+outputs: heal tag out of the IR LED.
+****/
+void Base_Handler_Function( int team){
+  static unsigned long send_ack_tag;
+  static unsigned long base_heal;
+  
+  //if I receive team = 999, then I start sending signals
+  if (team == 999){
+    send_ack_tag = 0;
+    base_heal = 0;
+  }
+  
+  //now, I need to see if I need to send a signal out, which I do every 250 ms
+  if(millis() > send_ack_tag){
+    //to send a tag as a base, my ID is 0
+    tag_ID_array[0] = 0;
+    tag_ID_array[1] = 0;
+    //my unique attack modifier is 1
+    tag_UAM_array[0] = 0;
+    //now I need to send the tag
+    send_tag();
+    //the send tag function will build a tag out of the ID and UAM arrays
+    
+    //now, I need to reset my timer to send this tag in another 250 ms
+    send_ack_tag = millis() + 250;
+  }
+  
+  //my base passively heals every 10 seconds
+  if(millis() > base_heal){
+    if(BASE_HEALTH != MAX_BASE_HEALTH) BASE_HEALTH++;
+    base_heal = millis() + 10000;
+  }
+  
 }
 
 //insert coded stuff here, you know :)
