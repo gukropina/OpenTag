@@ -1,5 +1,5 @@
 /*gukropina 
-May 23, 2015
+June 7, 2015
 Open Tag Developement
 
 Booyah
@@ -11,9 +11,18 @@ Current work:
 Added piezo to add sounds to the game (3 sounds, tag sent, hit, and can't tag)
 Haven't added some sort of handler for interrupting sounds, so sounds are short.
 
-Do next: 1. add the next two parts of your protocol: team and damage
+Do next: 0. Make the status LED stay on? (complete)
+         6. PWM from LED Handler: You need to add on and off time for LED handler
+            that way, you can dim LED's, and do true PWM without really using PWM.
+            Then change health to status LED brightness, and have status LED always on. (complete)
+         2. Make sure piezo_handler function is working (complete)
+         0.1 Add fire rate (so you can't just spam firing too quickly) (complete)
+         0.2 Add cooldowns for abilities (complete)
+         0.3 Make status LED dim with health depletion (complete)
+
+         1. add the next two parts of your protocol: team and damage
             to do this, you need to change: variables, i_am_tagged, send_tag
-         2. Make sure piezo_handler function is working
+         2. Add #define statements for magic numbers in your code (99, 999, etc.)
          3. Change your send_tag arrays to all caps for global variables
          4. Base: make it so that if you are a base, and receive a tag w/ different team,
             you take 1 damage. At health = 0, you switch teams and have 1 health
@@ -21,9 +30,7 @@ Do next: 1. add the next two parts of your protocol: team and damage
          5. Your send_tag function will need to be more complex to handle abilities, 
             and then send regular tags afterwards. Or maybe, before tagging, rebuild
             the arrays from defaults (or at least check them all).
-         6. True PWM from LED Handler: You need to add on and off time for LED handler
-            that way, you can dim LED's, and do true PWM without really using PWM.
-            Then change health to status LED brightness, and have status LED always on.
+         
 
 All units are now on a 600 microsec protocol.
 
@@ -120,7 +127,25 @@ const int piezo_pin = 2;                     //piezo
 //****LED constants
 const int blink_time = 1000;                 //time for one blink of LED in ms
 const int blink_time_fast = 200; 
+const int blink_time_base = 1;              //fastest time you will change LED
 const int num_of_LEDs = 2;                             //number of LED's. For LED_handler function
+
+//****ABILITY constants/cooldowns
+const int NUM_ABILITIES = 2;                //number of abilities you have
+int ability_cooldown_array[NUM_ABILITIES] = {100, 1000};  //cooldown for those abilities
+
+//the constants below make my code easier to understand. This is me telling the compiler
+//what these words mean so that I can write in English tha tmakes sense to me, and the
+//compiler will translate that to numbers (which the arduino functions I wrote can understand)
+#define TAG_ABILITY 0                 //tag ability is set to ability 0 (this could be a #define)
+#define SET 1                         //I use 1 to set cooldowns and LED blinks
+#define CHECK 0                       //I use 0 to check cooldowns and LED blinks
+
+/* Notes: Abilities:
+0: firing cooldown
+1: primary ability 1
+
+*/
 
 //******** protocol definitions
 const long protocol_duration = 600;         //length of time a bit is send according to protocol in microseconds
@@ -210,8 +235,10 @@ void setup(){
    //you need to blink every LED to set the variables for them
    //delay(500);
    }
-  LED_handler(hit_LED_pin, 2, blink_time_fast, 1);
-  LED_handler(status_LED_pin, 2, blink_time_fast, 1); 
+  LED_handler(hit_LED_pin, 2, blink_time_fast, blink_time_fast, SET);
+  LED_handler(status_LED_pin, 97, blink_time_base, blink_time_base, SET); 
+  Cooldown_Handler(TAG_ABILITY, ability_cooldown_array[TAG_ABILITY], SET);
+  Cooldown_Handler(1, ability_cooldown_array[1], SET);
   if(I_AM_A_BASE) Base_Handler_Function(999);   //if I'm a base, start the base up!
  }
  
@@ -235,8 +262,8 @@ void setup(){
    check_if_tagging();
    
    //now I need to check to see if I need to turn off my LED's
-   LED_handler(hit_LED_pin, 0, 0, 0);
-   LED_handler(status_LED_pin, 0, 0, 0);
+   LED_handler(hit_LED_pin, 0, 0, 0, CHECK);
+   LED_handler(status_LED_pin, 0, 0, 0, CHECK);
    
    /*
    if (serial_debug){
@@ -288,12 +315,19 @@ void i_am_tagged(void){
  
  if(unique_attack_modifier == 0){
    HEALTH = HEALTH--;                       //programmer speak for health = health - 1;
-   LED_handler(hit_LED_pin, 2, blink_time, 1);                                   //blink LED 
-   if(HEALTH > 0) LED_handler(status_LED_pin, HEALTH*2, blink_time_fast, 1);     //blink status of health
-   }
+   LED_handler(hit_LED_pin, 2, blink_time, 0, SET);                                   //blink LED 
+   if(HEALTH > 0){
+     //if I have health, dim status LED to reflect current health
+     LED_handler(status_LED_pin, 99, blink_time_base*HEALTH, blink_time_base*(MAX_HEALTH - HEALTH), SET);   
+     }
+   else{
+     digitalWrite(status_LED_pin, LOW);                          //turn status LED off
+     LED_handler(status_LED_pin, 0, 0, 0, SET);
+     }
+ }
  else if(unique_attack_modifier == 1){
    HEALTH = MAX_HEALTH;                             //if I'm hit by the base, regain health
-   LED_handler(status_LED_pin, HEALTH*2, blink_time_fast, 1);     //blink status of health
+   LED_handler(status_LED_pin, HEALTH*2 + 1, blink_time_fast, blink_time_fast, SET);     //blink status of health
    }
    
  //make a sound now that I'm hit
@@ -335,23 +369,24 @@ void check_if_tagging( void ){
    }
   } 
     
-  if(button_changed){          //if I'm trying to fire
-     if (HEALTH > 0){          //and I have health
-       //if so, I am pushing the button for the first time, do something
-       send_tag();                       //run tagging code
-       //now I want to set my LED high, but not use a delay, so that I can have the code do other
-       //stuff
-       LED_handler(hit_LED_pin, 2, blink_time, 1);
-       LED_handler(status_LED_pin, 2, blink_time, 1);
-       
-       //make a sound
-       Piezo_Handler(0);   //0 is code for I am sending a tag
+  if(button_changed){                              //if I'm trying to fire
+     //if I have health, and tagging is off cooldown
+     if (HEALTH > 0 && Cooldown_Handler(TAG_ABILITY, 0, CHECK) ){
+         send_tag();                               //run tagging code
+         //reset cooldown for tagging
+         Cooldown_Handler(TAG_ABILITY, ability_cooldown_array[TAG_ABILITY], SET);
+         
+         //now I want to set my LED high, but not use a delay, so that I can have the code do other
+         //stuff, so I use a function that blinks LED's and keeps track of when to turn them on/off
+         LED_handler(hit_LED_pin, 2, blink_time, 0, SET);
+         LED_handler(status_LED_pin, 1, blink_time_fast, blink_time_fast, SET);
+         
+         //make a sound
+         Piezo_Handler(0);   //0 is code for I am sending a tag
        }
      else{
        //if I try to fire and don't have health, do something
-       LED_handler(status_LED_pin, 6, blink_time, 1);       //for now, I will blink 3 times.
        
-       //and make a can't send tag sound
        Piezo_Handler(2);   //2 is piezo code for can't tag
        
        }
@@ -817,17 +852,21 @@ It will use this information to call the appropriate function to check each LED.
 Those functions will turn LED's on and off
 It will be called every loop, or to set data for certain pins
 intpus: handler_LED_pin - (int) the LED pin that I am manipulating
-        handler_blinks - (int) the number of times that pin should blink
-        handler_blink_time - (int) time in milliseconds that the LED should blink for
+        handler_blinks - (int) the number of times that pin should blink (if = 99, blinks infinitely)
+        handler_blink_time_on - (int) time in milliseconds that the LED should blink on for
+        handler_blink_time_off - (int) time in milliseconds that the LED should blink off for
+        set_LED - (int) whether to set variables or check (1 to set variables, 0 to check LED)
 outputs: changes output of LED's
 *****/
 
-void LED_handler( int handler_LED_pin, int handler_blinks, int handler_blink_time, int set_LED){
- static unsigned long LED_change_time[num_of_LEDs];     //keep track of time to turn all LED's on or off
- static int LED_blinks[num_of_LEDs];          //keeps track of the number of blinks
- static int LED_blink_time[num_of_LEDs];      //keeps track of time to blink LED's
- int i;                                       //internal variable for each LED
- int changed_LED;                             //variable to see if I changed LED, 1 if changed, 0 if not
+void LED_handler( int handler_LED_pin, int handler_blinks, int handler_blink_time_on, int handler_blink_time_off,
+                  int set_LED){
+ static unsigned long LED_change_time[num_of_LEDs]; //keep track of time to turn all LED's on
+ static int LED_blinks[num_of_LEDs];                //keeps track of the number of blinks
+ static int LED_blink_time_on[num_of_LEDs];         //keeps track of time to blink LED's
+ static int LED_blink_time_off[num_of_LEDs];        //keeps track of time to blink LED's
+ int i;                                             //internal variable for each LED
+ int changed_LED;                                   //variable to see if I changed LED, 1 if changed, 0 if not
  
  //figure out which pin I'm working with, and use that one
  switch(handler_LED_pin){
@@ -846,15 +885,20 @@ void LED_handler( int handler_LED_pin, int handler_blinks, int handler_blink_tim
  if(set_LED){
    LED_change_time[i] = millis();                        //set time to change LED
    LED_blinks[i] = handler_blinks;                       //set number of blinks
-   LED_blink_time[i] = handler_blink_time;               //set time between blinks
-   /*
+   LED_blink_time_on[i] = handler_blink_time_on;         //set time between blinks
+   LED_blink_time_off[i] = handler_blink_time_off;       //set time between blinks
+   
    if(serial_debug){
      Serial.print("set LED ");
      Serial.println(i);
      delay(50);
    }
-   */
-   digitalWrite(handler_LED_pin, LOW);                   //reset LED to beginning
+   if(LED_blinks[i] != -1){
+     //if I am not blinking infinitely, start at LED off
+     digitalWrite(handler_LED_pin, LOW);                   //reset LED to beginning
+     //turn on LED after appropriate time
+     LED_change_time[i] = millis() + LED_blink_time_off[i];
+     }
  }
  else{
  //if I'm not setting, then I'm checking
@@ -862,31 +906,29 @@ void LED_handler( int handler_LED_pin, int handler_blinks, int handler_blink_tim
  if(LED_blinks[i] > 0){
    //first, call a function to check to see if I need to switch the LED state (on or off)
    changed_LED = check_LED( handler_LED_pin, LED_change_time[i]);
-   /*
-   if(serial_debug){
-       Serial.print("checked LED ");
-       Serial.println(i);
-       delay(50);
-       if(changed_LED) Serial.println("I switched LED states");
-       delay(50);
-     }
-     */
+   //this function checks, and changes, the LED state if it is time to
+     
    //if I changed the LED, I need to update the times
-   if(changed_LED){
-    LED_blinks[i] = LED_blinks[i] - 1;                  //decrement number of blinks
-    /*
+   if(changed_LED == 1){
+      //if changed_LED ==1, I went from low to high, so stay on for change_time_on
+      LED_change_time[i] = millis() + LED_blink_time_on[i];
+      if(LED_blinks[i] != 99) LED_blinks[i] = LED_blinks[i] - 1;      //decrement number of blinks
+      //I'm adding an unsigned long and an int...is arduino ok with that? Yes.
+      }
+    else if(changed_LED == 2){
+      //changed_LED == 2, so I went from high to low, so stay off for change_time_off
+      LED_change_time[i] = millis() + LED_blink_time_off[i];
+      if(LED_blinks[i] != 99) LED_blinks[i] = LED_blinks[i] - 1;      //decrement number of blinks
+    }
+    
+    
     if(serial_debug){
+     Serial.println("I switched LED states");
      Serial.print("Number of blinks left ");
      Serial.println(LED_blinks[i]); 
      delay(50);
-    }
-    */
-    //now I want to see if I should set the time to change the LED again
-    if(LED_blinks[i] > 0){
-      LED_change_time[i] = millis() + LED_blink_time[i];
-      //if(serial_debug) Serial.println("Set for next Blink");
-      //I'm adding an unsigned long and an int...is arduino ok with that?
-      }
+     }
+    
     }
   }
  }
@@ -894,7 +936,7 @@ void LED_handler( int handler_LED_pin, int handler_blinks, int handler_blink_tim
  //when millis() overflows, this code will keep a light on until you reset it. but hey, 
  //that'll happen almost never.
  //unless you don't turn the unit off for over a month (50 days ish)
-}
+
 
 /*******
 check_LED
@@ -907,9 +949,7 @@ output: 0 if I did not change the pin
 int check_LED( int set_LED_pin, unsigned long time_switch){
   //see if I have passed the time
   if(millis() > time_switch){
-    change_LED(set_LED_pin);               //change state of LED
-    //if(serial_debug) Serial.println("change LED");
-    return 1;
+    return change_LED(set_LED_pin);               //change state of LED;
   }
  else{
    return 0;
@@ -920,21 +960,64 @@ int check_LED( int set_LED_pin, unsigned long time_switch){
  change_LED
  changes the state of an LED on a pin
  inputs: pin to manipulate
- outputs: void
-          changes state of pin
+ outputs: 1 if changed pin from Low to High
+          2 if changed pin from high to low
 ******/
-void change_LED(int LED_pin){
+int change_LED(int LED_pin){
  //get the current state
  int state = digitalRead(LED_pin); 
  if(state){
    //if the LED is HIGH
    digitalWrite(LED_pin, LOW);
+   return 2;
  }
  else{
   //otherwise, turn LED HIGH
-  digitalWrite(LED_pin, HIGH); 
+  digitalWrite(LED_pin, HIGH);
+  return 1; 
  }
 }
+
+/******
+Cooldown_Handler
+This function handles cooldowns for abilities. 
+It keeps track of when you can use an ability/tag
+intpus: handler_ability - (int) the ability you are checking/setting
+        handler_cooldown - (int) cooldown for ability
+        set_cooldown - (int) reset cooldown (1 to reset, 0 to check cooldown)
+outputs: 0 - (int) can't use ability
+         1 - (int) ability off cooldown and can use.
+Notes: Abilities:
+0: tagging
+1: primary ability
+******/
+
+int Cooldown_Handler(int handler_ability, int handler_cooldown, int set_cooldown){
+ static unsigned long cooldown_time[NUM_ABILITIES];   //keep track of time cooldown is off for each ability
+ 
+ if(handler_ability > NUM_ABILITIES - 1){
+   if(serial_debug){
+     Serial.print("invalid ability");
+     delay(50);
+     }
+   return 0;      //if I'm not checking an actual ability, stop
+   }
+ 
+ //if I'm setting variables, then set them
+ if(set_cooldown){
+   cooldown_time[handler_ability] = millis() + handler_cooldown;    //set cooldown time for ability
+   }
+ else{
+ //if I'm not setting, then I'm checking
+ if(millis() > cooldown_time[handler_ability]){
+   return 1;
+   }
+ else{
+   return 0;
+   }
+ }
+} 
+
 
 /*******
 Piezo_Handler
@@ -996,7 +1079,7 @@ void Piezo_Handler(int sound){
      
      delay(10);
      tone(piezo_pin, NOTE_A2);
-     delay(25);
+     delay(75);
      noTone(piezo_pin);   
      break;
   default:
