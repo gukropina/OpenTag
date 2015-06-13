@@ -30,6 +30,13 @@ Do next: 0. Make the status LED stay on? (complete)
          5. Your send_tag function will need to be more complex to handle abilities, 
             and then send regular tags afterwards. Or maybe, before tagging, rebuild
             the arrays from defaults (or at least check them all).
+            Change your send_tag function to take in integers for the arguments:
+            ID
+            Team
+            Damage
+            Unique attack modifier
+            and build the tag to send off of those.
+         6. Can you use your Piezo for input? (that would be a cool easter egg).
          
 
 All units are now on a 600 microsec protocol.
@@ -403,6 +410,20 @@ outputs: outputs onto ir_LED_pin the correct procol to send a tag
 *****************/
 void send_tag(void){
   //first, I need to set up my tag_sent_array with the correct tag to send
+  
+  //code you need: take the integers, and bitwise combine them to make 1 a long
+  //in your for loop, pick off the bits that you want (1 at a time) and save them
+  //into your tag array
+  //the tag array is: ID bits, Team bits, Damage bits, UAM bits.
+  //shift ID bits by team bits # + damage bits # + UAM bits
+  //shift team bits by damage bits + UAM bits
+  //shift damage bits by UAM bits
+  //then bitwise or them all together to form a long
+  //this will mean max bits sent is 32.
+  //you can build the array backwards, right shifting the int evey time and picking off
+  //the last bit using the AND function and doing long & 0x0001.
+  
+  
   for (int i=0; i < tag_length; i++){
     if(i < tag_ID_length){
       tag_sent_array[i] = tag_ID_array[i];
