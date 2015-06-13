@@ -37,6 +37,8 @@ Do next: 0. Make the status LED stay on? (complete)
             Unique attack modifier
             and build the tag to send off of those.
          6. Can you use your Piezo for input? (that would be a cool easter egg).
+         7. When you add Neopixel library, you should have the send tag function turn off
+            the timer automatically. (change your add pulse function to turn off timer)
          
 
 All units are now on a 600 microsec protocol.
