@@ -142,6 +142,8 @@ const int num_of_LEDs = 2;                             //number of LED's. For LE
 //****ABILITY constants/cooldowns
 const int NUM_ABILITIES = 2;                //number of abilities you have
 int ability_cooldown_array[NUM_ABILITIES] = {100, 1000};  //cooldown for those abilities
+//Ability 0 = tagging'
+//Ability 1 = class ability
 
 //the constants below make my code easier to understand. This is me telling the compiler
 //what these words mean so that I can write in English tha tmakes sense to me, and the
@@ -150,22 +152,25 @@ int ability_cooldown_array[NUM_ABILITIES] = {100, 1000};  //cooldown for those a
 #define SET 1                         //I use 1 to set cooldowns and LED blinks
 #define CHECK 0                       //I use 0 to check cooldowns and LED blinks
 
-/* Notes: Abilities:
-0: firing cooldown
-1: primary ability 1
-
-*/
 
 //******** protocol definitions
 const long protocol_duration = 600;         //length of time a bit is send according to protocol in microseconds
 const int timeout = 30;                      //timeout in milliseconds. If i don't receive aything, I'm done
-//for this to work: tag_length = tag_ID_length + tag_UAM_length + tag_damage_length
-const int tag_length = 3;                    //number of bits in the tag
+//for this to work: TAG_LENGTH = tag_ID_length + tag_UAM_length + tag_damage_length
+const int TAG_LENGTH = 7;                    //number of bits in the tag
 const int tag_ID_length = 2;                 //number of bits in the tag that are for the tag ID (first)
-//const int tag_team_length = 2;               //number of bits in the tag that are for team ID
-//const int tag_damage_length = 2;             //number of bits in the tag that are for tag damage
+const int tag_team_length = 2;               //number of bits in the tag that are for team ID
+const int tag_damage_length = 2;             //number of bits in the tag that are for tag damage
 const int tag_UAM_length = 1;                //number of bits in the tag that are for the unique attack modifier
 //Note: when you add team and damage, you need to change I am tagged, send_tag, and Base_handler functions
+//LIMITATION: you are using an integer to send tags, and are shifting bits to check them. You have a limit of 15
+//bits you can send (due to how you wrote send_tag and how you build your array)
+
+//integers for global variables
+int ID = 1;
+int TEAM = 1;
+int DAMAGE = 1;
+int UAM = 0;
 
 const long protocol_start = 3*protocol_duration;           //start signal
 const long protocol_one = 2*protocol_duration;             // 1
@@ -174,13 +179,14 @@ const long protocol_end = 4*protocol_duration;             // end signal
 
 //when I make this game with bases, my ID can be given by the base
 //for now, I enter my ID in binary below
-int tag_sent_array[tag_length] = {0, 1, 0};            //this sets the tag you send
+int TAG_SENT_ARRAY[TAG_LENGTH] = {0, 1, 0, 1, 0, 1, 0};            //this sets the tag you send
+// {0, 1, 0, 1, 0, 1, 0}
 int tag_ID_array[tag_ID_length] = {0, 1};              // this sets the tag ID in binary
-//int tag_team_array[tag_team_length] = {0, 1};              // this sets the team number in binary (0 for base)
-//int tag_damage_array[tag_damage_length] = {0, 1};          // this sets the tag damage in binary
-int tag_UAM_array[tag_ID_length] = {0};                // this sets the tag unique attack modifier in binary
-int tag_received_array[tag_length];                    // array for tags I receive
-int debug_array[2][tag_length + 2];                    //for debugging how long of a signal I got
+int tag_team_array[tag_team_length] = {0, 1};              // this sets the team number in binary (0 for base)
+int tag_damage_array[tag_damage_length] = {0, 1};          // this sets the tag damage in binary
+int tag_UAM_array[tag_UAM_length] = {0};                // this sets the tag unique attack modifier in binary
+int tag_received_array[TAG_LENGTH];                    // array for tags I receive
+int debug_array[2][TAG_LENGTH + 2];                    //for debugging how long of a signal I got
 //I have two methods of calculating time hit at the moment. I'm using the better one and can delete the old one.
 
 //********** Other constants
@@ -233,8 +239,8 @@ void setup(){
   delay(1000);
   Serial.print("tag to send is: ");
   int i;
-  for(i=0; i < tag_length; i++){
-    Serial.print(tag_sent_array[i]);
+  for(i=0; i < TAG_LENGTH; i++){
+    Serial.print(TAG_SENT_ARRAY[i]);
     Serial.print(", "); 
     }
    Serial.println("");
@@ -356,7 +362,7 @@ void i_am_tagged(void){
  
  //now I need to clear out who tagged me, since I'm done using it
  int i;
- for(i=0; i < tag_length; i++){
+ for(i=0; i < TAG_LENGTH; i++){
   tag_received_array[i] = 0; 
  }
 }
@@ -381,7 +387,7 @@ void check_if_tagging( void ){
   if(button_changed){                              //if I'm trying to fire
      //if I have health, and tagging is off cooldown
      if (HEALTH > 0 && Cooldown_Handler(TAG_ABILITY, 0, CHECK) ){
-         send_tag();                               //run tagging code
+         send_tag(ID, TEAM, DAMAGE, UAM);                    //send ID, team, damage, UAM using protocol
          //reset cooldown for tagging
          Cooldown_Handler(TAG_ABILITY, ability_cooldown_array[TAG_ABILITY], SET);
          
@@ -410,9 +416,11 @@ inputs: None. this uses the global arrays:
 tag_ID_array, tag_damage_array, tag_UAM_array
 outputs: outputs onto ir_LED_pin the correct procol to send a tag
 *****************/
-void send_tag(void){
+void send_tag(int tag_ID, int tag_team, int tag_damage, int tag_UAM){
   //first, I need to set up my tag_sent_array with the correct tag to send
-  
+  //this differs from the global TAG_SENT_ARRAY, which I use for testing
+  int tag_sent_array[TAG_LENGTH];
+  int i;
   //code you need: take the integers, and bitwise combine them to make 1 a long
   //in your for loop, pick off the bits that you want (1 at a time) and save them
   //into your tag array
@@ -425,19 +433,45 @@ void send_tag(void){
   //you can build the array backwards, right shifting the int evey time and picking off
   //the last bit using the AND function and doing long & 0x0001.
   
+  int tag_to_send = 0;
+  //first, add in the UAM
+  tag_to_send = tag_to_send + (tag_ID << (tag_team_length + tag_damage_length + tag_UAM_length) );
+  tag_to_send = tag_to_send + (tag_team << (tag_damage_length + tag_UAM_length) );
+  tag_to_send = tag_to_send + (tag_damage << tag_UAM_length );
   
-  for (int i=0; i < tag_length; i++){
-    if(i < tag_ID_length){
-      tag_sent_array[i] = tag_ID_array[i];
-      }
-    else if(i < tag_ID_length + tag_UAM_length){
-      tag_sent_array[i] = tag_UAM_array[i - tag_ID_length];
-      }
+  if(serial_debug){
+    Serial.print("binary tag sent: ");
+    Serial.println(tag_to_send, BIN);
+  }
+  
+  //what I want to do now is to build an array of what bits I want to send. I'm going to build that
+  //from the end of the int tag_to_send and shifting what bit I look at 1 at a time
+  int bit_I_look_at = 1 << TAG_LENGTH;
+  //to pick off the first bit, I need to move the bit I want over TAG_LENGTH - 1 times.
+  //however, I'm going to shift this integer over by 1 bit every time i start my for loop
+  int zero_or_one = 0;
+  
+  for (int i=0; i < TAG_LENGTH; i++){
+    //first, I want to pick off the first (most significant) bit in tag_to_send
+    bit_I_look_at >> 1;
+    zero_or_one = tag_to_send & bit_I_look_at;
+    //now I have either a 0, or a non-zero number. So check what to add
+    if(zero_or_one == 0){
+      //If I got a 0, then add a 0 to my array
+      tag_sent_array[i] = 0;
     }
+    else{
+      //otherwise, send a 1
+      tag_sent_array[i] = 1;
+    }
+    //now that I have checked
+  }
+      
+
   if (serial_debug){
     Serial.print("tag to send is: {");
     int i;
-    for(i=0; i < tag_length; i++){
+    for(i=0; i < TAG_LENGTH; i++){
       Serial.print(tag_sent_array[i]);
       Serial.print(", "); 
       }
@@ -452,7 +486,7 @@ void send_tag(void){
   send_pulse(protocol_start);                   //send a low signal (delay in microseconds)
   //microsec_debug = micros() - microsec_debug_start;    //save difference in microseconds
   delayMicroseconds(protocol_duration);         //protocol delay, like the protocol dictates
-  for (int i=0; i < tag_length; i++){           //for each bit in the tag_ID_Array
+  for (int i=0; i < TAG_LENGTH; i++){           //for each bit in the tag_ID_Array
     if (tag_sent_array[i] == 0){                // if the bit is a 0, send a 0
       send_pulse(protocol_zero);                //I'm sending a 0
     }
@@ -533,7 +567,7 @@ int tag_function(int IR_Pin){
          Serial.print("Error: ");
          Serial.println(error);
          int i;
-         for(i=0; i < tag_length + 2; i++){
+         for(i=0; i < TAG_LENGTH + 2; i++){
            /*
            Serial.print("Microseconds of pulse (my timing): ");
            Serial.print(debug_array[0][i]);
@@ -549,7 +583,7 @@ int tag_function(int IR_Pin){
            delay(50);
          }
          Serial.print("Tag received: ");
-         for(i=0; i < tag_length; i++){
+         for(i=0; i < TAG_LENGTH; i++){
           Serial.print( tag_received_array[i] );
           Serial.print(", ");
          }
@@ -591,7 +625,7 @@ int tag_function(int IR_Pin){
        //now I need to clear any data that I may have written into my global arrays
        //since I am done using them, and want to be ready for the next tag
        int i;
-       for(i=0; i < tag_length + 2; i++){
+       for(i=0; i < TAG_LENGTH + 2; i++){
         debug_array[0][i] = 0;
         debug_array[1][i] = 0; 
        }
@@ -639,18 +673,18 @@ int read_tag(int IR_Pin){
        if(ir_receiver_got == 0 || ir_receiver_got == 1){
         //If I got a 1 or a 0, I need to store it to my array
         //but only if I'm not past my index
-        if(index != tag_length) {
+        if(index != TAG_LENGTH) {
           tag_received_array[index] = ir_receiver_got;
           index++;                                          //add one to index
         }
         else{
-          //if index == tag_length, I'm passed my array. What's going on here. Abort!!!
+          //if index == TAG_LENGTH, I'm passed my array. What's going on here. Abort!!!
           return 6;           //alert the code! I've got an error
         }
        }
        else if (ir_receiver_got == 3){ 
          //I'm being told to stop
-        if(index == tag_length){
+        if(index == TAG_LENGTH){
          //I've filled my array with data, so it should be a valid tag
         return 0;
         }
@@ -1135,7 +1169,7 @@ void Base_Handler_Function( int team){
     //my unique attack modifier is 1
     tag_UAM_array[0] = 0;
     //now I need to send the tag
-    send_tag();
+    send_tag(ID, TEAM, DAMAGE, UAM);
     //the send tag function will build a tag out of the ID and UAM arrays
     
     //now, I need to reset my timer to send this tag in another 250 ms
