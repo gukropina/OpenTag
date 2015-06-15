@@ -1,5 +1,5 @@
 /*gukropina 
-June 7, 2015
+June 14, 2015
 Open Tag Developement
 
 Booyah
@@ -8,20 +8,16 @@ Note: Are you uploading to the correct board?
 
 Current work:
 
-Added piezo to add sounds to the game (3 sounds, tag sent, hit, and can't tag)
 Haven't added some sort of handler for interrupting sounds, so sounds are short.
 
-Do next: 0. Make the status LED stay on? (complete)
-         6. PWM from LED Handler: You need to add on and off time for LED handler
-            that way, you can dim LED's, and do true PWM without really using PWM.
-            Then change health to status LED brightness, and have status LED always on. (complete)
-         2. Make sure piezo_handler function is working (complete)
-         0.1 Add fire rate (so you can't just spam firing too quickly) (complete)
-         0.2 Add cooldowns for abilities (complete)
-         0.3 Make status LED dim with health depletion (complete)
-
-         1. add the next two parts of your protocol: team and damage
+Do next: 1. add the next two parts of your protocol: team and damage
             to do this, you need to change: variables, i_am_tagged, send_tag
+            1.1 - You have successfully changed the send_tag function to accept integer
+                  values for what you are going to send. (complete)
+            1.2 - You now have to change the i_am_tagged function to read everything
+                  Note: you will have to use global arrays to store who tagged you,
+                  since you can only return one value from a function, and you want
+                  to return error codes.
          2. Add #define statements for magic numbers in your code (99, 999, etc.)
          3. Change your send_tag arrays to all caps for global variables
          4. Base: make it so that if you are a base, and receive a tag w/ different team,
@@ -39,6 +35,7 @@ Do next: 0. Make the status LED stay on? (complete)
          6. Can you use your Piezo for input? (that would be a cool easter egg).
          7. When you add Neopixel library, you should have the send tag function turn off
             the timer automatically. (change your add pulse function to turn off timer)
+            Since the Neopixel library uses interrupts.
          
 
 All units are now on a 600 microsec protocol.
@@ -428,8 +425,8 @@ void send_tag(int tag_ID, int tag_team, int tag_damage, int tag_UAM){
   //shift ID bits by team bits # + damage bits # + UAM bits
   //shift team bits by damage bits + UAM bits
   //shift damage bits by UAM bits
-  //then bitwise or them all together to form a long
-  //this will mean max bits sent is 32.
+  //then bitwise AND or add them all together to form an int
+  //this will mean max bits sent is 15 (based on how code is written, you miss first bit)
   //you can build the array backwards, right shifting the int evey time and picking off
   //the last bit using the AND function and doing long & 0x0001.
   
@@ -439,10 +436,6 @@ void send_tag(int tag_ID, int tag_team, int tag_damage, int tag_UAM){
   tag_to_send = tag_to_send + (tag_team << (tag_damage_length + tag_UAM_length) );
   tag_to_send = tag_to_send + (tag_damage << tag_UAM_length );
   
-  if(serial_debug){
-    Serial.print("binary tag sent: ");
-    Serial.println(tag_to_send, BIN);
-  }
   
   //what I want to do now is to build an array of what bits I want to send. I'm going to build that
   //from the end of the int tag_to_send and shifting what bit I look at 1 at a time
@@ -453,7 +446,7 @@ void send_tag(int tag_ID, int tag_team, int tag_damage, int tag_UAM){
   
   for (int i=0; i < TAG_LENGTH; i++){
     //first, I want to pick off the first (most significant) bit in tag_to_send
-    bit_I_look_at >> 1;
+    bit_I_look_at = bit_I_look_at >> 1;
     zero_or_one = tag_to_send & bit_I_look_at;
     //now I have either a 0, or a non-zero number. So check what to add
     if(zero_or_one == 0){
@@ -464,7 +457,18 @@ void send_tag(int tag_ID, int tag_team, int tag_damage, int tag_UAM){
       //otherwise, send a 1
       tag_sent_array[i] = 1;
     }
-    //now that I have checked
+    //now that I have checked, say what I did
+    if(serial_debug){
+      Serial.println(i);
+      Serial.print("binary tag sent: ");
+      Serial.println(tag_to_send, BIN);
+      Serial.print("bit_I_look_at: ");
+      Serial.println(bit_I_look_at, BIN);
+      Serial.print("zero_or_one: ");
+      Serial.println(zero_or_one);
+      Serial.print("tag_sent_array[i]: ");
+      Serial.println(tag_sent_array[i]);
+    }
   }
       
 
@@ -978,13 +982,14 @@ void LED_handler( int handler_LED_pin, int handler_blinks, int handler_blink_tim
       if(LED_blinks[i] != 99) LED_blinks[i] = LED_blinks[i] - 1;      //decrement number of blinks
     }
     
-    
+    /*
     if(serial_debug){
      Serial.println("I switched LED states");
      Serial.print("Number of blinks left ");
      Serial.println(LED_blinks[i]); 
      delay(50);
      }
+     */
     
     }
   }
