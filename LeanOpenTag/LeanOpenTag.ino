@@ -17,7 +17,7 @@ Do next: 1. add the next two parts of your protocol: team and damage
             1.2 - You now have to change the i_am_tagged function to read everything
                   Note: you will have to use global arrays to store who tagged you,
                   since you can only return one value from a function, and you want
-                  to return error codes.
+                  to return error codes. (ready to test)
          2. Add #define statements for magic numbers in your code (99, 999, etc.)
          3. Change your send_tag arrays to all caps for global variables
          4. Base: make it so that if you are a base, and receive a tag w/ different team,
@@ -153,12 +153,12 @@ int ability_cooldown_array[NUM_ABILITIES] = {100, 1000};  //cooldown for those a
 //******** protocol definitions
 const long protocol_duration = 600;         //length of time a bit is send according to protocol in microseconds
 const int timeout = 30;                      //timeout in milliseconds. If i don't receive aything, I'm done
-//for this to work: TAG_LENGTH = tag_ID_length + tag_UAM_length + tag_damage_length
+//for this to work: TAG_LENGTH = TAG_ID_LENGTH + TAG_UAM_LENGTH + TAG_DAMAGE_LENGTH
 const int TAG_LENGTH = 7;                    //number of bits in the tag
-const int tag_ID_length = 2;                 //number of bits in the tag that are for the tag ID (first)
-const int tag_team_length = 2;               //number of bits in the tag that are for team ID
-const int tag_damage_length = 2;             //number of bits in the tag that are for tag damage
-const int tag_UAM_length = 1;                //number of bits in the tag that are for the unique attack modifier
+const int TAG_ID_LENGTH = 2;                 //number of bits in the tag that are for the tag ID (first)
+const int TAG_TEAM_LENGTH = 2;               //number of bits in the tag that are for team ID
+const int TAG_DAMAGE_LENGTH = 2;             //number of bits in the tag that are for tag damage
+const int TAG_UAM_LENGTH = 1;                //number of bits in the tag that are for the unique attack modifier
 //Note: when you add team and damage, you need to change I am tagged, send_tag, and Base_handler functions
 //LIMITATION: you are using an integer to send tags, and are shifting bits to check them. You have a limit of 15
 //bits you can send (due to how you wrote send_tag and how you build your array)
@@ -178,11 +178,11 @@ const long protocol_end = 4*protocol_duration;             // end signal
 //for now, I enter my ID in binary below
 int TAG_SENT_ARRAY[TAG_LENGTH] = {0, 1, 0, 1, 0, 1, 0};            //this sets the tag you send
 // {0, 1, 0, 1, 0, 1, 0}
-int tag_ID_array[tag_ID_length] = {0, 1};              // this sets the tag ID in binary
-int tag_team_array[tag_team_length] = {0, 1};              // this sets the team number in binary (0 for base)
-int tag_damage_array[tag_damage_length] = {0, 1};          // this sets the tag damage in binary
-int tag_UAM_array[tag_UAM_length] = {0};                // this sets the tag unique attack modifier in binary
-int tag_received_array[TAG_LENGTH];                    // array for tags I receive
+int tag_ID_array[TAG_ID_LENGTH] = {0, 1};              // this sets the tag ID in binary
+int tag_team_array[TAG_TEAM_LENGTH] = {0, 1};              // this sets the team number in binary (0 for base)
+int tag_damage_array[TAG_DAMAGE_LENGTH] = {0, 1};          // this sets the tag damage in binary
+int tag_UAM_array[TAG_UAM_LENGTH] = {0};                // this sets the tag unique attack modifier in binary
+int TAG_RECEIVED_ARRAY[TAG_LENGTH];                    // array for tags I receive
 int debug_array[2][TAG_LENGTH + 2];                    //for debugging how long of a signal I got
 //I have two methods of calculating time hit at the moment. I'm using the better one and can delete the old one.
 
@@ -249,8 +249,8 @@ void setup(){
    }
   LED_handler(hit_LED_pin, 2, blink_time_fast, blink_time_fast, SET);
   LED_handler(status_LED_pin, 97, blink_time_base, blink_time_base, SET); 
-  Cooldown_Handler(TAG_ABILITY, ability_cooldown_array[TAG_ABILITY], SET);
-  Cooldown_Handler(1, ability_cooldown_array[1], SET);
+  cooldown_handler(TAG_ABILITY, ability_cooldown_array[TAG_ABILITY], SET);
+  cooldown_handler(1, ability_cooldown_array[1], SET);
   if(I_AM_A_BASE) Base_Handler_Function(999);   //if I'm a base, start the base up!
  }
  
@@ -322,10 +322,15 @@ outputs: void
 void i_am_tagged(void){
  //well, you got tagged. So what happens to you?
  //first, figure out who tagged you, how much damage, and what unique attack modifier
- int tagged_me = get_tag_ID( 0, tag_ID_length - 1);   
- int unique_attack_modifier = get_tag_ID(tag_ID_length, tag_ID_length + tag_UAM_length - 1);
+ //Call the function that pulls the data from the TAG_RECEIVED_ARRAY[]
+ int tagged_me = get_tag_ID( 0, TAG_ID_LENGTH - 1);
+ int tagged_team = get_tag_ID(TAG_ID_LENGTH, TAG_ID_LENGTH + TAG_TEAM_LENGTH - 1);
+ int tagged_damage =  get_tag_ID(TAG_ID_LENGTH + TAG_TEAM_LENGTH, 
+                                 TAG_ID_LENGTH + TAG_TEAM_LENGTH + TAG_DAMAGE_LENGTH - 1);
+ int tagged_UAM = get_tag_ID(TAG_ID_LENGTH + TAG_TEAM_LENGTH + TAG_DAMAGE_LENGTH,
+                             TAG_ID_LENGTH + TAG_TEAM_LENGTH + TAG_DAMAGE_LENGTH + TAG_UAM_LENGTH - 1);
  
- if(unique_attack_modifier == 0){
+ if(tagged_UAM == 0){
    HEALTH = HEALTH--;                       //programmer speak for health = health - 1;
    LED_handler(hit_LED_pin, 2, blink_time, 0, SET);                                   //blink LED 
    if(HEALTH > 0){
@@ -337,7 +342,7 @@ void i_am_tagged(void){
      LED_handler(status_LED_pin, 0, 0, 0, SET);
      }
  }
- else if(unique_attack_modifier == 1){
+ else if(tagged_UAM == 1){
    HEALTH = MAX_HEALTH;                             //if I'm hit by the base, regain health
    LED_handler(status_LED_pin, HEALTH*2 + 1, blink_time_fast, blink_time_fast, SET);     //blink status of health
    }
@@ -350,8 +355,12 @@ void i_am_tagged(void){
  if(serial_debug){
    Serial.print("Who tagged me: ");
    Serial.println(tagged_me);
+   Serial.print("Team that tagged me: ");
+   Serial.println(tagged_team);
+   Serial.print("Damage from tag: ");
+   Serial.println(tagged_damage);
    Serial.print("Unique Attack Modifier: ");
-   Serial.println(unique_attack_modifier);
+   Serial.println(tagged_UAM);
    Serial.print("Health: ");
    Serial.println(HEALTH);
    Serial.println(" ");
@@ -360,7 +369,7 @@ void i_am_tagged(void){
  //now I need to clear out who tagged me, since I'm done using it
  int i;
  for(i=0; i < TAG_LENGTH; i++){
-  tag_received_array[i] = 0; 
+  TAG_RECEIVED_ARRAY[i] = 0; 
  }
 }
 
@@ -383,10 +392,10 @@ void check_if_tagging( void ){
     
   if(button_changed){                              //if I'm trying to fire
      //if I have health, and tagging is off cooldown
-     if (HEALTH > 0 && Cooldown_Handler(TAG_ABILITY, 0, CHECK) ){
+     if (HEALTH > 0 && cooldown_handler(TAG_ABILITY, 0, CHECK) ){
          send_tag(ID, TEAM, DAMAGE, UAM);                    //send ID, team, damage, UAM using protocol
          //reset cooldown for tagging
-         Cooldown_Handler(TAG_ABILITY, ability_cooldown_array[TAG_ABILITY], SET);
+         cooldown_handler(TAG_ABILITY, ability_cooldown_array[TAG_ABILITY], SET);
          
          //now I want to set my LED high, but not use a delay, so that I can have the code do other
          //stuff, so I use a function that blinks LED's and keeps track of when to turn them on/off
@@ -397,7 +406,7 @@ void check_if_tagging( void ){
          Piezo_Handler(0);   //0 is code for I am sending a tag
        }
      else{
-       //if I try to fire and don't have health, do something
+       //if I try to fire and can't, do something
        
        Piezo_Handler(2);   //2 is piezo code for can't tag
        
@@ -432,9 +441,9 @@ void send_tag(int tag_ID, int tag_team, int tag_damage, int tag_UAM){
   
   int tag_to_send = 0;
   //first, add in the UAM
-  tag_to_send = tag_to_send + (tag_ID << (tag_team_length + tag_damage_length + tag_UAM_length) );
-  tag_to_send = tag_to_send + (tag_team << (tag_damage_length + tag_UAM_length) );
-  tag_to_send = tag_to_send + (tag_damage << tag_UAM_length );
+  tag_to_send = tag_to_send + (tag_ID << (TAG_TEAM_LENGTH + TAG_DAMAGE_LENGTH + TAG_UAM_LENGTH) );
+  tag_to_send = tag_to_send + (tag_team << (TAG_DAMAGE_LENGTH + TAG_UAM_LENGTH) );
+  tag_to_send = tag_to_send + (tag_damage << TAG_UAM_LENGTH );
   
   
   //what I want to do now is to build an array of what bits I want to send. I'm going to build that
@@ -588,7 +597,7 @@ int tag_function(int IR_Pin){
          }
          Serial.print("Tag received: ");
          for(i=0; i < TAG_LENGTH; i++){
-          Serial.print( tag_received_array[i] );
+          Serial.print( TAG_RECEIVED_ARRAY[i] );
           Serial.print(", ");
          }
          Serial.println(" ");
@@ -648,7 +657,7 @@ outputs: an integer, which is one of the following:
   6: received too many bits
   7: didn't receive enough bits
   8: timout
-It also changes the tag_received_array with the tag i've got
+It also changes the TAG_RECEIVED_ARRAY with the tag i've got
 This function uses the read_protocol helper function to read what was sent
 ********************/
 int read_tag(int IR_Pin){
@@ -678,7 +687,7 @@ int read_tag(int IR_Pin){
         //If I got a 1 or a 0, I need to store it to my array
         //but only if I'm not past my index
         if(index != TAG_LENGTH) {
-          tag_received_array[index] = ir_receiver_got;
+          TAG_RECEIVED_ARRAY[index] = ir_receiver_got;
           index++;                                          //add one to index
         }
         else{
@@ -743,8 +752,8 @@ int read_protocol(int Pin_Read, int i) {
 
 /****************
 get_tag_ID
-This is only called after I have received a tag and stored it into tag_received_array.
-tag_received_array is the ID of my tagger (no start or stop codes)
+This is only called after I have received a tag and stored it into TAG_RECEIVED_ARRAY.
+TAG_RECEIVED_ARRAY is the ID of my tagger (no start or stop codes)
 This outputs an integer with the ID (or value) of a specific part of the tag
 It builds the integer from the back of the tag (starts with the 1's position)
 and moves towards the 2's, 4's, etc. position to build an integer.
@@ -756,13 +765,13 @@ int get_tag_ID(int array_start, int array_stop){
   int i;
   for (i = array_start; i <= array_stop; i++){
     output = output << 1;                        //bitshift left to multiply by 2 and shift all bits
-    output = output + tag_received_array[i];     //add new bit
+    output = output + TAG_RECEIVED_ARRAY[i];     //add new bit
     /* don't need serial debug anymore
     if(serial_debug){
       Serial.print("i: ");
       Serial.println(i);
       Serial.print("tag received array: ");
-      Serial.println(tag_received_array[i]);
+      Serial.println(TAG_RECEIVED_ARRAY[i]);
       Serial.print("output: ");
       Serial.println(output);
       delay(500);
@@ -1041,7 +1050,7 @@ int change_LED(int LED_pin){
 }
 
 /******
-Cooldown_Handler
+cooldown_handler
 This function handles cooldowns for abilities. 
 It keeps track of when you can use an ability/tag
 intpus: handler_ability - (int) the ability you are checking/setting
@@ -1054,7 +1063,7 @@ Notes: Abilities:
 1: primary ability
 ******/
 
-int Cooldown_Handler(int handler_ability, int handler_cooldown, int set_cooldown){
+int cooldown_handler(int handler_ability, int handler_cooldown, int set_cooldown){
  static unsigned long cooldown_time[NUM_ABILITIES];   //keep track of time cooldown is off for each ability
  
  if(handler_ability > NUM_ABILITIES - 1){
