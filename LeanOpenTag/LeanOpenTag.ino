@@ -17,7 +17,7 @@ Do next: 1. add the next two parts of your protocol: team and damage
             1.2 - You now have to change the i_am_tagged function to read everything
                   Note: you will have to use global arrays to store who tagged you,
                   since you can only return one value from a function, and you want
-                  to return error codes. (ready to test)
+                  to return error codes. (complete)
          2. Add #define statements for magic numbers in your code (99, 999, etc.)
          3. Change your send_tag arrays to all caps for global variables
          4. Base: make it so that if you are a base, and receive a tag w/ different team,
