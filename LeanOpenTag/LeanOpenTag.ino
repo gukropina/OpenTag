@@ -1,5 +1,5 @@
 /*gukropina 
-June 14, 2015
+September 7, 2015
 Open Tag Developement
 
 Booyah
@@ -10,14 +10,7 @@ Current work:
 
 Haven't added some sort of handler for interrupting sounds, so sounds are short.
 
-Do next: 1. add the next two parts of your protocol: team and damage
-            to do this, you need to change: variables, i_am_tagged, send_tag
-            1.1 - You have successfully changed the send_tag function to accept integer
-                  values for what you are going to send. (complete)
-            1.2 - You now have to change the i_am_tagged function to read everything
-                  Note: you will have to use global arrays to store who tagged you,
-                  since you can only return one value from a function, and you want
-                  to return error codes. (complete)
+Do next: 1. add sound to your current units and test the game.
          2. Add #define statements for magic numbers in your code (99, 999, etc.)
          3. Change your send_tag arrays to all caps for global variables
          4. Base: make it so that if you are a base, and receive a tag w/ different team,
@@ -243,15 +236,23 @@ void setup(){
    Serial.println("");
    Serial.print("Protocol duration: ");
    Serial.println(protocol_duration);
-   delay(500);
    //you need to blink every LED to set the variables for them
-   //delay(500);
    }
   LED_handler(hit_LED_pin, 2, blink_time_fast, blink_time_fast, SET);
   LED_handler(status_LED_pin, 97, blink_time_base, blink_time_base, SET); 
   cooldown_handler(TAG_ABILITY, ability_cooldown_array[TAG_ABILITY], SET);
   cooldown_handler(1, ability_cooldown_array[1], SET);
+  //if(serial_debug) Serial.println("got past cooldowns");
   if(I_AM_A_BASE) Base_Handler_Function(999);   //if I'm a base, start the base up!
+  //if(serial_debug) Serial.println("got past base");
+  
+  //make a startup sound
+  for (int i = 2000; i < 5000; i++){
+         tone(piezo_pin, i);
+         delay(20);
+         noTone(piezo_pin);
+         i = i + 50;
+       }
  }
  
  
@@ -263,11 +264,18 @@ void setup(){
    //first thing I need to do is check to see if I'm getting tagged
    //I am going to call the function that checks everything for each pin I have a
    //receiver attached to
+   //if(serial_debug) Serial.println("beginning loop");
    check_if_tagged(ir_receiver_pin_1);
+   //if(serial_debug) Serial.println("got 1");
    check_if_tagged(ir_receiver_pin_2);
+   //if(serial_debug) Serial.println("got 2");
    check_if_tagged(ir_receiver_pin_3);
+   //if(serial_debug) Serial.println("got 3");
    check_if_tagged(ir_receiver_pin_4);
+   //if(serial_debug) Serial.println("got 4");
    check_if_tagged(ir_receiver_pin_5);
+   //if(serial_debug) Serial.println("got 5");
+   //if(serial_debug) Serial.println("checked if tagged");
    
    //now that I've checked to see if I'm being tagged, I need to check to see
    //if I'm trying to tag someone else
@@ -283,6 +291,7 @@ void setup(){
     delay(500);
    }
    */
+   
    if(I_AM_A_BASE) Base_Handler_Function( 0 );
  }
  
@@ -345,10 +354,16 @@ void i_am_tagged(void){
  else if(tagged_UAM == 1){
    HEALTH = MAX_HEALTH;                             //if I'm hit by the base, regain health
    LED_handler(status_LED_pin, HEALTH*2 + 1, blink_time_fast, blink_time_fast, SET);     //blink status of health
-   }
+   Piezo_Handler(4);  //4 code is for startup sound
+ }
    
  //make a sound now that I'm hit
- Piezo_Handler(1);   //1 is code for i was hit
+ if(HEALTH == 0){
+   Piezo_Handler(3); //3 code is for I'm out sound
+ }
+ else{
+   Piezo_Handler(1);   //1 is code for i was hit
+ }
    
  
  //for now, I just want to print out who tagged me
@@ -1065,6 +1080,10 @@ Notes: Abilities:
 
 int cooldown_handler(int handler_ability, int handler_cooldown, int set_cooldown){
  static unsigned long cooldown_time[NUM_ABILITIES];   //keep track of time cooldown is off for each ability
+ if(serial_debug){
+  Serial.print("cooldown handler: ");
+  Serial.println(handler_ability);
+ }
  
  if(handler_ability > NUM_ABILITIES - 1){
    if(serial_debug){
@@ -1079,13 +1098,13 @@ int cooldown_handler(int handler_ability, int handler_cooldown, int set_cooldown
    cooldown_time[handler_ability] = millis() + handler_cooldown;    //set cooldown time for ability
    }
  else{
- //if I'm not setting, then I'm checking
- if(millis() > cooldown_time[handler_ability]){
-   return 1;
-   }
- else{
-   return 0;
-   }
+   //if I'm not setting, then I'm checking
+   if(millis() > cooldown_time[handler_ability]){
+     return 1;
+     }
+   else{
+     return 0;
+     }
  }
 } 
 
@@ -1099,6 +1118,7 @@ Sounds:
   0: send tag
   1: received tag
   2: cannot tag
+  3: out
 *******/
 
 void Piezo_Handler(int sound){
@@ -1123,6 +1143,7 @@ void Piezo_Handler(int sound){
          i = i - 250;
        }
       break;
+  
   case 1:    //received tag sound
      tone(piezo_pin, NOTE_D6);
      delay(25);
@@ -1143,6 +1164,7 @@ void Piezo_Handler(int sound){
      delay(25);
      noTone(piezo_pin);
      break;
+  
   case 2:    //cannot tag sound
      tone(piezo_pin, NOTE_A3);
      delay(25);
@@ -1153,6 +1175,34 @@ void Piezo_Handler(int sound){
      delay(75);
      noTone(piezo_pin);   
      break;
+    
+  
+  case 3:    //out sound
+    for (int i = 5000; i > 2000; i--){
+       tone(piezo_pin, i);
+       delay(25);
+       noTone(piezo_pin);
+       i = i - 50;
+     }
+     tone(piezo_pin, NOTE_A3);
+     delay(25);
+     noTone(piezo_pin);
+   
+     delay(10);
+     tone(piezo_pin, NOTE_A2);
+     delay(75);
+     noTone(piezo_pin);   
+     break;
+     
+  case 4:   //turning on sound
+  
+  for (int i = 2000; i < 5000; i++){
+         tone(piezo_pin, i);
+         delay(20);
+         noTone(piezo_pin);
+         i = i + 50;
+       }
+
   default:
     break;
  }
