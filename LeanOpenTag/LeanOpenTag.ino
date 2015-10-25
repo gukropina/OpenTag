@@ -1,5 +1,5 @@
 /*gukropina 
-September 7, 2015
+October 25, 2015
 Open Tag Developement
 
 Booyah
@@ -131,7 +131,7 @@ const int num_of_LEDs = 2;                             //number of LED's. For LE
 
 //****ABILITY constants/cooldowns
 const int NUM_ABILITIES = 2;                //number of abilities you have
-int ability_cooldown_array[NUM_ABILITIES] = {100, 1000};  //cooldown for those abilities
+int ability_cooldown_array[NUM_ABILITIES] = {350, 1000};  //cooldown for those abilities
 //Ability 0 = tagging'
 //Ability 1 = class ability
 
@@ -193,8 +193,8 @@ const int RECEIVING_DELAY = 5;             //this is the delay in microseconds b
 //this is empirically derived from having my receiver send a signal, then see how long i timed for.
 
 //******GLOBAL VARIABLES*****
-int HEALTH = 5;         //this is the number of times i can be hit before you can't tag
-int MAX_HEALTH = 5;     //this is the max health that you can have (you spawn with max health)
+int HEALTH = 25;         //this is the number of times i can be hit before you can't tag
+int MAX_HEALTH = 25;     //this is the max health that you can have (you spawn with max health)
 //health is an int, so goes from 32,000 to -32,000. Hopefully i don't need to care about overflow...
 int BASE_HEALTH = 20;     //this is the health of the base
 int MAX_BASE_HEALTH = 20; //this is the max health of the base
@@ -261,6 +261,10 @@ void setup(){
  ******************/
  void loop()
  {
+    if (serial_debug){
+    Serial.println("looping"); 
+    delay(500);
+   }
    //first thing I need to do is check to see if I'm getting tagged
    //I am going to call the function that checks everything for each pin I have a
    //receiver attached to
@@ -285,12 +289,12 @@ void setup(){
    LED_handler(hit_LED_pin, 0, 0, 0, CHECK);
    LED_handler(status_LED_pin, 0, 0, 0, CHECK);
    
-   /*
+   
    if (serial_debug){
     Serial.println("looping"); 
     delay(500);
    }
-   */
+   
    
    if(I_AM_A_BASE) Base_Handler_Function( 0 );
  }
@@ -1119,6 +1123,8 @@ Sounds:
   1: received tag
   2: cannot tag
   3: out
+  4: turning on
+  5: blip (unused)
 *******/
 
 void Piezo_Handler(int sound){
@@ -1203,6 +1209,21 @@ void Piezo_Handler(int sound){
          i = i + 50;
        }
 
+  case 5:    //little blip sound
+    tone(2, 1000);
+    delay(15);
+    noTone(2);
+    
+    delay(5);
+    tone(2, 350);
+    delay(25);
+    noTone(2);
+    
+    delay(5);
+    tone(2, 1000);
+    delay(15);
+    noTone(2);
+    
   default:
     break;
  }
